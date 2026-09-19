@@ -57,14 +57,20 @@ function resize(){const d=dims(),r=Math.min(2,devicePixelRatio||1);c.width=Math.
 /* World coordinates:
    x = lateral across plate, y = height, z = distance toward mound.
    Camera is the batter's right-handed eye position, not home-plate center. */
+const PLATE_HALF=.2159,PLATE_FRONT=.4318,RUBBER_Z=18.44;
 function camera(){
   const d=dims();
-  const eye=V(-.74,1.66,-.78);
-  const look=V(0,1.28,18.44);
+  // Same validated coordinate system as debug-3d.html:
+  // +Z pitcher, -Z catcher, +X third-base / right-handed batter side.
+  const eye=V(.76,1.68,-.62);
+  // Batter primarily keys on the release window rather than the plate center.
+  const look=V(.18,1.82,16.80);
   const fwd=norm(sub(look,eye));
   const right=norm(cross(V(0,1,0),fwd));
   const up=norm(cross(fwd,right));
-  return{eye,fwd,right,up,focal:d.w*.43,cx:d.w*.50,cy:d.h*.46}
+  const fov=58*Math.PI/180;
+  const focal=(d.h*.5)/Math.tan(fov*.5);
+  return{eye,fwd,right,up,focal,cx:d.w*.50,cy:d.h*.48}
 }
 function project(p){
   const C=camera(),r=sub(p,C.eye),z=dot(r,C.fwd);
@@ -72,7 +78,9 @@ function project(p){
   return{x:C.cx+C.focal*dot(r,C.right)/z,y:C.cy-C.focal*dot(r,C.up)/z,z}
 }
 function worldZone(){
-  return{left:-.43,right:.43,low:.52,high:1.16,z:.12}
+  // Temporary fixed strike-zone height for the MVP.
+  // Width and crossing plane are tied to regulation home-plate geometry.
+  return{left:-PLATE_HALF,right:PLATE_HALF,low:.52,high:1.16,z:PLATE_FRONT}
 }
 function zonePoly(){
   const z=worldZone();
@@ -94,7 +102,7 @@ function throwPitch(){
   S.n++;pitchNo.textContent=S.n;
   S.pitch={
     type:t,
-    release:V(rand(-.14,.14),rand(1.70,1.86),18.44),
+    release:V(rand(.08,.28),rand(1.70,1.90),rand(16.55,17.05)),
     target:V(rand(z.left+.05,z.right-.05),rand(z.low+.04,z.high-.04),z.z),
     dir:Math.random()<.5?-1:1
   };
@@ -176,20 +184,48 @@ function drawZone(){
     x.beginPath();x.moveTo(t.x,t.y);x.lineTo(b.x,b.y);x.stroke()
   }x.restore()
 }
+function worldPath(points,fill,stroke,lineWidth=1){
+  const ps=points.map(project).filter(Boolean);if(ps.length!==points.length)return;
+  x.beginPath();x.moveTo(ps[0].x,ps[0].y);for(let i=1;i<ps.length;i++)x.lineTo(ps[i].x,ps[i].y);x.closePath();
+  if(fill){x.fillStyle=fill;x.fill()}if(stroke){x.strokeStyle=stroke;x.lineWidth=lineWidth;x.stroke()}
+}
+function worldLine(points,color='#ffffff66',lineWidth=1){
+  const ps=points.map(project).filter(Boolean);if(ps.length!==points.length)return;
+  x.beginPath();x.moveTo(ps[0].x,ps[0].y);for(let i=1;i<ps.length;i++)x.lineTo(ps[i].x,ps[i].y);
+  x.strokeStyle=color;x.lineWidth=lineWidth;x.stroke()
+}
 function drawField(){
   const d=dims();
-  let sky=x.createLinearGradient(0,0,0,d.h*.48);sky.addColorStop(0,'#263744');sky.addColorStop(1,'#11191e');x.fillStyle=sky;x.fillRect(0,0,d.w,d.h*.48);
-  x.fillStyle='#0b1113';x.fillRect(0,d.h*.27,d.w,d.h*.09);
-  x.fillStyle='#263c31';x.fillRect(0,d.h*.35,d.w,d.h*.65);
-  // Perspective field / dirt, intentionally asymmetric because the camera is in the RH box.
-  x.fillStyle='#5c4737';x.beginPath();x.moveTo(d.w*.07,d.h);x.lineTo(d.w*.44,d.h*.42);x.lineTo(d.w*.57,d.h*.42);x.lineTo(d.w*.99,d.h);x.closePath();x.fill();
-  x.strokeStyle='#e7e2d399';x.lineWidth=2;x.beginPath();x.moveTo(d.w*.10,d.h*.98);x.lineTo(d.w*.43,d.h*.43);x.moveTo(d.w*.98,d.h*.98);x.lineTo(d.w*.58,d.h*.43);x.stroke();
-  const mound=project(V(0,0,18.44)),pit=project(V(0,1.25,18.44));
-  if(mound){x.fillStyle='#74614b';x.beginPath();x.ellipse(mound.x,mound.y+7,25,6,0,0,Math.PI*2);x.fill()}
+  let sky=x.createLinearGradient(0,0,0,d.h);
+  sky.addColorStop(0,'#263845');sky.addColorStop(.44,'#10191e');sky.addColorStop(.45,'#263d31');sky.addColorStop(1,'#182b22');
+  x.fillStyle=sky;x.fillRect(0,0,d.w,d.h);
+
+  // Perspective ground references. These all use the same world coordinates as the ball.
+  worldPath([V(-7,0,1),V(7,0,1),V(8,0,24),V(-8,0,24)],'#294535',null);
+  worldLine([V(0,0,0),V(-8,0,24)],'#ece7da55',1.5);
+  worldLine([V(0,0,0),V(8,0,24)],'#ece7da55',1.5);
+
+  // Dirt lane toward the mound.
+  worldPath([V(-1.25,.006,-.25),V(1.25,.006,-.25),V(1.8,.006,19.3),V(-1.8,.006,19.3)],'#5d4939aa',null);
+
+  // Regulation home plate: rear apex at z=0, 17-inch front edge faces the pitcher.
+  worldPath([
+    V(-PLATE_HALF,.018,PLATE_FRONT),V(PLATE_HALF,.018,PLATE_FRONT),
+    V(PLATE_HALF,.018,PLATE_FRONT/2),V(0,.018,0),V(-PLATE_HALF,.018,PLATE_FRONT/2)
+  ],'#e8e5dc','#ffffffaa',1);
+
+  // Right-handed batter's box (+X / third-base side), faint ground reference.
+  const bi=PLATE_HALF+.1524,bo=bi+1.2192,bz=PLATE_FRONT/2,bh=.9144;
+  worldLine([V(bi,.02,bz-bh),V(bo,.02,bz-bh),V(bo,.02,bz+bh),V(bi,.02,bz+bh),V(bi,.02,bz-bh)],'#e8e2d255',1);
+
+  // Pitcher's rubber and simple mound.
+  worldPath([V(-.3048,.018,RUBBER_Z),V(.3048,.018,RUBBER_Z),V(.3048,.018,RUBBER_Z+.1524),V(-.3048,.018,RUBBER_Z+.1524)],'#e8e5dc',null);
+  const pit=project(V(0,1.25,RUBBER_Z-.35));
   if(pit)pitcher(pit.x,pit.y);
-  // Near edge of the batter and bat in peripheral vision.
-  x.save();x.globalAlpha=.30;x.fillStyle='#111820';x.beginPath();x.ellipse(-26,d.h*.76,72,150,-.08,0,Math.PI*2);x.fill();
-  x.strokeStyle='#d0b178';x.lineWidth=9;x.lineCap='round';x.beginPath();x.moveTo(d.w*.02,d.h*.96);x.lineTo(d.w*.13,d.h*.58);x.stroke();x.restore()
+
+  // Peripheral hint of a right-handed batter's bat; intentionally subtle.
+  x.save();x.globalAlpha=.26;x.strokeStyle='#d0b178';x.lineWidth=8;x.lineCap='round';
+  x.beginPath();x.moveTo(d.w*.96,d.h*.94);x.lineTo(d.w*.84,d.h*.61);x.stroke();x.restore()
 }
 function drawBall(now){
   if(!S.pitch||S.phase==='idle')return;
@@ -202,7 +238,7 @@ function drawBall(now){
   }
   x.globalAlpha=1;
   const b=pos(now);if(!b||b.t>1.16)return;
-  const radius=clamp(115/Math.max(.65,b.depth),3.3,15.5);
+  const radius=clamp(70/Math.max(.45,b.depth),2.4,15.0);
   x.fillStyle=S.pitch.type.col;x.shadowColor='#ffffffaa';x.shadowBlur=8;
   x.beginPath();x.arc(b.x,b.y,radius,0,Math.PI*2);x.fill();x.shadowBlur=0
 }
