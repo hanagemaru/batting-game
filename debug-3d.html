@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0b1015">
+<title>Batting 3D Geometry Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#090d12;--panel:#111820;--line:#2b3946;--muted:#8896a5;--text:#eef2f5;--accent:#7ee2ff;--warn:#ffb85c}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+body{min-height:100dvh}
+header{position:sticky;top:0;z-index:10;padding:max(10px,env(safe-area-inset-top)) 12px 10px;background:#090d12e8;border-bottom:1px solid var(--line);backdrop-filter:blur(8px)}
+h1{font-size:14px;margin:0;letter-spacing:.08em}
+.sub{font-size:9px;color:var(--muted);margin-top:4px;line-height:1.5}
+.toolbar{display:flex;gap:6px;overflow:auto;padding:9px 10px;background:#0d1319;border-bottom:1px solid var(--line)}
+.toolbar button{flex:0 0 auto;border:1px solid #3a4a59;background:#151e27;color:#cbd5df;padding:8px 10px;font:800 10px ui-monospace,monospace;border-radius:4px}
+.toolbar button.active{background:#dff8ff;color:#081015;border-color:#dff8ff}
+.stage{position:relative;height:54dvh;min-height:360px;background:#05080b}
+#three{width:100%;height:100%;display:block;touch-action:none}
+.legend{position:absolute;left:8px;bottom:8px;background:#071017d9;border:1px solid #31404e;padding:7px 8px;font-size:8px;line-height:1.7;color:#b8c4cf;pointer-events:none}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
+.cyan{background:#58dcff}.orange{background:#ffac5f}.white{background:#fff}.red{background:#ff6b6b}
+.note{position:absolute;top:8px;right:8px;max-width:48%;text-align:right;font-size:8px;line-height:1.55;color:#a8b5c1;background:#071017b8;padding:6px}
+.controls{padding:12px 10px calc(24px + env(safe-area-inset-bottom));display:grid;gap:12px;max-width:760px;margin:auto}
+.section{border:1px solid var(--line);background:var(--panel);padding:10px}
+.section h2{font-size:10px;letter-spacing:.12em;color:#d4dde5;margin:0 0 9px}
+.grid{display:grid;grid-template-columns:1fr;gap:9px}
+.ctrl{display:grid;grid-template-columns:120px 1fr 58px;gap:8px;align-items:center}
+.ctrl label{font-size:9px;color:#aebac6;line-height:1.25}
+.ctrl output{text-align:right;font-size:9px;color:#fff}
+input[type=range]{width:100%;accent-color:#88e7ff}
+.readout{font-size:9px;line-height:1.75;color:#a8b5c1}
+.readout strong{color:#fff}
+.actions{display:flex;gap:8px}
+.actions button{flex:1;border:1px solid #455666;background:#17212b;color:#eef2f5;min-height:42px;font:900 10px ui-monospace,monospace}
+.actions button.primary{background:#f6d765;color:#16130b;border-color:#fff1ad}
+@media(min-width:700px){.grid{grid-template-columns:1fr 1fr}.stage{height:62dvh}.ctrl{grid-template-columns:135px 1fr 60px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>BATTING 3D GEOMETRY LAB</h1>
+  <div class="sub">ゲーム本体とは別の検証ページです。単位は m。ホームベース周辺を原点に、+Z がマウンド方向、-X が三塁側（右打者側）。</div>
+</header>
+
+<div class="toolbar">
+  <button data-view="batter" class="active">BATTER POV</button>
+  <button data-view="orbit">FREE 3D</button>
+  <button data-view="top">TOP</button>
+  <button data-view="side">SIDE</button>
+  <button id="pauseBtn">PAUSE BALL</button>
+</div>
+
+<div class="stage" id="stage">
+  <canvas id="three"></canvas>
+  <div class="note" id="viewNote">右打者の「目」の位置から、リリースポイント方向を見ています。</div>
+  <div class="legend">
+    <div><span class="dot cyan"></span>Eye / camera</div>
+    <div><span class="dot orange"></span>Release point</div>
+    <div><span class="dot red"></span>Pitch trajectory</div>
+    <div><span class="dot white"></span>Home plate / strike zone</div>
+  </div>
+</div>
+
+<main class="controls">
+  <section class="section">
+    <h2>CAMERA — RIGHT-HANDED BATTER EYE</h2>
+    <div class="grid">
+      <div class="ctrl"><label>Eye X<br>左右位置</label><input id="eyeX" type="range" min="-1.20" max="-0.35" step="0.01" value="-0.76"><output></output></div>
+      <div class="ctrl"><label>Eye Y<br>目の高さ</label><input id="eyeY" type="range" min="1.40" max="1.90" step="0.01" value="1.68"><output></output></div>
+      <div class="ctrl"><label>Eye Z<br>前後位置</label><input id="eyeZ" type="range" min="-1.30" max="0.20" step="0.01" value="-0.62"><output></output></div>
+      <div class="ctrl"><label>Vertical FOV<br>視野角</label><input id="fov" type="range" min="40" max="80" step="1" value="58"><output></output></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>PITCHER / RELEASE</h2>
+    <div class="grid">
+      <div class="ctrl"><label>Release X<br>左右位置</label><input id="releaseX" type="range" min="-0.60" max="0.60" step="0.01" value="0.18"><output></output></div>
+      <div class="ctrl"><label>Release Y<br>リリース高</label><input id="releaseY" type="range" min="1.40" max="2.20" step="0.01" value="1.82"><output></output></div>
+      <div class="ctrl"><label>Release Z<br>プレートから距離</label><input id="releaseZ" type="range" min="15.50" max="18.20" step="0.01" value="16.80"><output></output></div>
+      <div class="ctrl"><label>Rubber Z<br>投手板</label><input id="rubberZ" type="range" min="18.00" max="18.80" step="0.01" value="18.44"><output></output></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>PLATE CROSSING / TRAJECTORY</h2>
+    <div class="grid">
+      <div class="ctrl"><label>Target X<br>コース</label><input id="targetX" type="range" min="-0.55" max="0.55" step="0.01" value="0.00"><output></output></div>
+      <div class="ctrl"><label>Target Y<br>高さ</label><input id="targetY" type="range" min="0.35" max="1.45" step="0.01" value="0.82"><output></output></div>
+      <div class="ctrl"><label>Horizontal curve<br>中間の横変化</label><input id="curveX" type="range" min="-0.60" max="0.60" step="0.01" value="0.00"><output></output></div>
+      <div class="ctrl"><label>Vertical curve<br>中間の上下変化</label><input id="curveY" type="range" min="-0.60" max="0.60" step="0.01" value="0.16"><output></output></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>CURRENT GEOMETRY</h2>
+    <div class="readout" id="readout"></div>
+  </section>
+
+  <div class="actions">
+    <button id="resetBtn">RESET</button>
+    <button class="primary" id="presetBtn">OUTSIDE LOW PRESET</button>
+  </div>
+</main>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const canvas=document.getElementById('three');
+const stage=document.getElementById('stage');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.shadowMap.enabled=true;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x081017);
+scene.fog=new THREE.Fog(0x081017,24,48);
+
+scene.add(new THREE.HemisphereLight(0xbfdcff,0x24301f,2.1));
+const sun=new THREE.DirectionalLight(0xffffff,2.4);
+sun.position.set(-6,10,-4);sun.castShadow=true;scene.add(sun);
+
+const ground=new THREE.Mesh(
+  new THREE.PlaneGeometry(28,46),
+  new THREE.MeshStandardMaterial({color:0x264332,roughness:1})
+);
+ground.rotation.x=-Math.PI/2;ground.position.z=8.5;ground.receiveShadow=true;scene.add(ground);
+
+const dirt=new THREE.Mesh(
+  new THREE.CircleGeometry(4.1,64),
+  new THREE.MeshStandardMaterial({color:0x6b523d,roughness:1})
+);
+dirt.rotation.x=-Math.PI/2;dirt.position.set(0,.006,0);dirt.scale.set(1,1.3,1);scene.add(dirt);
+
+const plateShape=new THREE.Shape();
+plateShape.moveTo(-.216,.216);plateShape.lineTo(.216,.216);plateShape.lineTo(.216,0);plateShape.lineTo(0,-.216);plateShape.lineTo(-.216,0);plateShape.closePath();
+const plateGeo=new THREE.ShapeGeometry(plateShape);
+plateGeo.rotateX(-Math.PI/2);
+const plate=new THREE.Mesh(plateGeo,new THREE.MeshStandardMaterial({color:0xffffff,side:THREE.DoubleSide}));
+plate.position.y=.018;scene.add(plate);
+
+function lineRect(x1,x2,z1,z2,color=0xffffff){
+  const pts=[new THREE.Vector3(x1,.025,z1),new THREE.Vector3(x2,.025,z1),new THREE.Vector3(x2,.025,z2),new THREE.Vector3(x1,.025,z2),new THREE.Vector3(x1,.025,z1)];
+  const geo=new THREE.BufferGeometry().setFromPoints(pts);
+  return new THREE.Line(geo,new THREE.LineBasicMaterial({color,transparent:true,opacity:.72}));
+}
+scene.add(lineRect(-1.587,-.368,-.914,.914,0xded8c8));
+scene.add(lineRect(.368,1.587,-.914,.914,0xded8c8));
+
+const strikeMat=new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.8});
+const strikePts=[
+  new THREE.Vector3(-.216,.48,.03),new THREE.Vector3(.216,.48,.03),
+  new THREE.Vector3(.216,1.18,.03),new THREE.Vector3(-.216,1.18,.03),
+  new THREE.Vector3(-.216,.48,.03)
+];
+const strikeZone=new THREE.Line(new THREE.BufferGeometry().setFromPoints(strikePts),strikeMat);scene.add(strikeZone);
+
+const rubber=new THREE.Mesh(new THREE.BoxGeometry(.61,.025,.15),new THREE.MeshStandardMaterial({color:0xe8e5dc}));
+scene.add(rubber);
+
+const pitcher=new THREE.Group();
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(.18,.72,5,10),new THREE.MeshStandardMaterial({color:0x485c6d}));
+body.position.y=1.03;body.castShadow=true;pitcher.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.13,18,12),new THREE.MeshStandardMaterial({color:0xd7b08a}));
+head.position.y=1.58;head.castShadow=true;pitcher.add(head);
+scene.add(pitcher);
+
+const eyeMarker=new THREE.Mesh(new THREE.SphereGeometry(.055,18,12),new THREE.MeshStandardMaterial({color:0x58dcff,emissive:0x14556b}));
+scene.add(eyeMarker);
+const releaseMarker=new THREE.Mesh(new THREE.SphereGeometry(.065,18,12),new THREE.MeshStandardMaterial({color:0xffac5f,emissive:0x5b2d08}));
+scene.add(releaseMarker);
+const targetMarker=new THREE.Mesh(new THREE.SphereGeometry(.045,18,12),new THREE.MeshStandardMaterial({color:0xff6b6b,emissive:0x551111}));
+scene.add(targetMarker);
+
+const ball=new THREE.Mesh(new THREE.SphereGeometry(.0365,20,14),new THREE.MeshStandardMaterial({color:0xf7f3e9,roughness:.65}));
+ball.castShadow=true;scene.add(ball);
+
+let trajectoryLine=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xff6b6b}));
+scene.add(trajectoryLine);
+let gazeLine=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineDashedMaterial({color:0x58dcff,dashSize:.18,gapSize:.10,transparent:true,opacity:.75}));
+scene.add(gazeLine);
+
+const batterCam=new THREE.PerspectiveCamera(58,1,.03,80);
+const orbitCam=new THREE.PerspectiveCamera(52,1,.05,100);
+orbitCam.position.set(-8,7,-8);
+const topCam=new THREE.OrthographicCamera(-7,7,12,-4,.01,100);
+topCam.position.set(0,25,8);topCam.up.set(0,0,1);topCam.lookAt(0,0,8);
+const sideCam=new THREE.OrthographicCamera(-2.2,20.5,3.3,-1.2,.01,100);
+sideCam.position.set(16,2.5,9);sideCam.up.set(0,1,0);sideCam.lookAt(0,1,9);
+
+const controls=new OrbitControls(orbitCam,renderer.domElement);
+controls.target.set(0,1,8);controls.enableDamping=true;controls.enabled=false;
+
+const camViz=new THREE.PerspectiveCamera(58,1,.03,80);
+const helper=new THREE.CameraHelper(camViz);scene.add(helper);
+
+const ids=['eyeX','eyeY','eyeZ','fov','releaseX','releaseY','releaseZ','rubberZ','targetX','targetY','curveX','curveY'];
+const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
+const defaults=Object.fromEntries(ids.map(id=>[id,Number(el[id].value)]));
+let activeView='batter',playing=true,startTime=performance.now();
+
+function val(id){return Number(el[id].value)}
+function fmt(v){return Number(v).toFixed(2)}
+function eye(){return new THREE.Vector3(val('eyeX'),val('eyeY'),val('eyeZ'))}
+function release(){return new THREE.Vector3(val('releaseX'),val('releaseY'),val('releaseZ'))}
+function target(){return new THREE.Vector3(val('targetX'),val('targetY'),.03)}
+
+function pathPoint(t){
+  const a=release(),b=target();
+  const p=new THREE.Vector3().lerpVectors(a,b,t);
+  const bulge=4*t*(1-t);
+  p.x+=val('curveX')*bulge;
+  p.y+=val('curveY')*bulge;
+  return p;
+}
+function rebuild(){
+  ids.forEach(id=>{
+    const out=el[id].nextElementSibling;
+    out.value=(id==='fov'?Math.round(val(id))+'°':fmt(val(id)));
+  });
+
+  const E=eye(),R=release(),T=target();
+  eyeMarker.position.copy(E);
+  releaseMarker.position.copy(R);
+  targetMarker.position.copy(T);
+  rubber.position.set(0,.018,val('rubberZ'));
+  pitcher.position.set(0,0,val('rubberZ')-.35);
+
+  const pts=[];for(let i=0;i<=90;i++)pts.push(pathPoint(i/90));
+  trajectoryLine.geometry.dispose();
+  trajectoryLine.geometry=new THREE.BufferGeometry().setFromPoints(pts);
+
+  gazeLine.geometry.dispose();
+  gazeLine.geometry=new THREE.BufferGeometry().setFromPoints([E,R]);
+  gazeLine.computeLineDistances();
+
+  batterCam.position.copy(E);
+  batterCam.fov=val('fov');
+  batterCam.lookAt(R);
+  batterCam.updateProjectionMatrix();
+
+  camViz.position.copy(E);camViz.fov=val('fov');camViz.aspect=batterCam.aspect;camViz.lookAt(R);camViz.updateProjectionMatrix();camViz.updateMatrixWorld();helper.update();
+
+  const lateral=Math.abs(E.x);
+  const eyeToRelease=E.distanceTo(R);
+  const plateAngle=THREE.MathUtils.radToDeg(Math.atan2(-E.x,Math.max(.01,R.z-E.z)));
+  document.getElementById('readout').innerHTML=
+    '<strong>Eye</strong> ('+fmt(E.x)+', '+fmt(E.y)+', '+fmt(E.z)+')<br>'+
+    '<strong>Release</strong> ('+fmt(R.x)+', '+fmt(R.y)+', '+fmt(R.z)+')<br>'+
+    '<strong>Plate target</strong> ('+fmt(T.x)+', '+fmt(T.y)+', '+fmt(T.z)+')<br>'+
+    '<strong>Eye lateral offset</strong> '+fmt(lateral)+' m &nbsp; / &nbsp; <strong>Eye→release</strong> '+fmt(eyeToRelease)+' m<br>'+
+    '<strong>Approx. horizontal viewing angle to release</strong> '+plateAngle.toFixed(1)+'°';
+}
+ids.forEach(id=>el[id].addEventListener('input',rebuild));
+
+function setView(view){
+  activeView=view;
+  document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+  controls.enabled=view==='orbit';
+  helper.visible=view!=='batter';
+  const notes={
+    batter:'右打者の「目」の位置から、リリースポイント方向を見ています。',
+    orbit:'自由3D。ドラッグで回転、ピンチでズームできます。',
+    top:'真上から。打者の横ズレと投球の横方向の入り方を確認します。',
+    side:'一塁側からの側面。目の高さ・リリース高・上下軌道を確認します。'
+  };
+  document.getElementById('viewNote').textContent=notes[view];
+}
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view));
+
+document.getElementById('pauseBtn').onclick=()=>{
+  playing=!playing;
+  document.getElementById('pauseBtn').textContent=playing?'PAUSE BALL':'PLAY BALL';
+  startTime=performance.now();
+};
+document.getElementById('resetBtn').onclick=()=>{
+  ids.forEach(id=>el[id].value=defaults[id]);rebuild();
+};
+document.getElementById('presetBtn').onclick=()=>{
+  el.targetX.value=.32;el.targetY.value=.58;el.curveX.value=-.18;el.curveY.value=.12;rebuild();
+};
+
+function resize(){
+  const w=stage.clientWidth,h=stage.clientHeight;
+  renderer.setSize(w,h,false);
+  [batterCam,orbitCam].forEach(cam=>{cam.aspect=w/h;cam.updateProjectionMatrix()});
+  camViz.aspect=w/h;camViz.updateProjectionMatrix();helper.update();
+
+  const worldAspect=w/h;
+  topCam.left=-7*worldAspect;topCam.right=7*worldAspect;topCam.top=12;topCam.bottom=-4;topCam.updateProjectionMatrix();
+  const span=worldAspect>1?4.8:3.6;
+  sideCam.left=-2.2;sideCam.right=20.5;sideCam.top=span;sideCam.bottom=-1.2;sideCam.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+
+function animate(now){
+  requestAnimationFrame(animate);
+  if(playing){
+    const t=((now-startTime)%1800)/1800;
+    ball.position.copy(pathPoint(t));
+  }
+  controls.update();
+  const cam=activeView==='batter'?batterCam:activeView==='orbit'?orbitCam:activeView==='top'?topCam:sideCam;
+  renderer.render(scene,cam);
+}
+rebuild();resize();setView('batter');requestAnimationFrame(animate);
+</script>
+</body>
+</html>
