@@ -1,13 +1,20 @@
 <!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pitch trajectory check</title>
-<style>body{font:14px ui-monospace,monospace;background:#0a0e13;color:#e9eef3;padding:20px;line-height:1.6}main{max-width:720px;margin:auto}.ok{color:#7ce6ad}.bad{color:#ff8181}canvas{width:100%;height:320px;border:1px solid #34414d;background:#111820}code{color:#9edcff}</style>
+<style>body{font:14px ui-monospace,monospace;background:#0a0e13;color:#e9eef3;padding:20px;line-height:1.6}main{max-width:720px;margin:auto}.ok{color:#7ce6ad}.bad{color:#ff8181}canvas{width:100%;height:320px;border:1px solid #34414d;background:#111820}code{color:#9edcff}.meta{color:#9ba8b5}</style>
 <main><h1>Pitch trajectory check</h1><p>Shared 3D pitch model invariants. Red = X lateral break, blue = Y height, gray = Z distance.</p><canvas id="c"></canvas><div id="out"></div></main>
 <script type="module">
-import {pitchPoint,endpointError,isMonotonicTowardPlate} from './pitch-model.js';
+import {pitchPoint,pointAtElapsed,flightMs,endpointError,isMonotonicTowardPlate,longitudinalStepSpread} from './pitch-model.js';
 const pitch={type:'CURVE',release:{x:.18,y:1.82,z:16.8},target:{x:0,y:.82,z:.4318},dir:1};
-const err=endpointError(pitch),mono=isMonotonicTowardPlate(pitch),eps=1e-10;
-const tests=[['release endpoint exact',err.release<eps,err.release],['plate target exact',err.target<eps,err.target],['Z monotonic toward plate',mono,mono]];
-document.getElementById('out').innerHTML=tests.map(([n,ok,v])=>`<div class="${ok?'ok':'bad'}">${ok?'PASS':'FAIL'} — ${n}: <code>${v}</code></div>`).join('');
+const err=endpointError(pitch),mono=isMonotonicTowardPlate(pitch),spread=longitudinalStepSpread(pitch),eps=1e-10,duration=flightMs(pitch);
+const timedEnd=pointAtElapsed(pitch,duration),timedErr=Math.hypot(timedEnd.x-pitch.target.x,timedEnd.y-pitch.target.y,timedEnd.z-pitch.target.z);
+const tests=[
+ ['release endpoint exact',err.release<eps,err.release],
+ ['plate target exact',err.target<eps,err.target],
+ ['Z monotonic toward plate',mono,mono],
+ ['constant longitudinal time step',spread<eps,spread],
+ ['elapsed-time endpoint exact',timedErr<eps,timedErr]
+];
+document.getElementById('out').innerHTML='<div class="meta">CURVE visual flight: <code>'+duration+' ms</code></div>'+tests.map(([n,ok,v])=>`<div class="${ok?'ok':'bad'}">${ok?'PASS':'FAIL'} — ${n}: <code>${v}</code></div>`).join('');
 const c=document.getElementById('c'),ctx=c.getContext('2d');function draw(){const r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;ctx.setTransform(r,0,0,r,0,0);ctx.clearRect(0,0,w,h);const series=[['#ff8181',p=>p.x,-.5,.5],['#9edcff',p=>p.y,.3,2],['#aab4bf',p=>p.z,0,17]];for(const [col,get,min,max] of series){ctx.strokeStyle=col;ctx.beginPath();for(let i=0;i<=120;i++){const u=i/120,p=pitchPoint(pitch,u),x=12+u*(w-24),y=h-12-(get(p)-min)/(max-min)*(h-24);i?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.stroke()}}draw();addEventListener('resize',draw);
 </script>
