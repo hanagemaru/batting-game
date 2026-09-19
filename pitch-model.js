@@ -1,18 +1,36 @@
 // Shared 3D pitch trajectory model for BATTER'S READ.
 // Coordinates follow debug-3d.html: +Z pitcher, +X third-base/RH-batter side.
-// All curve terms are zero at t=0 and t=1 so release and plate-crossing
-// coordinates remain exact. This avoids the previous model's endpoint drift.
+// Curve terms are zero at t=0 and t=1, so release and plate-crossing
+// coordinates remain exact.
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const lerp = (a, b, t) => a + (b - a) * t;
+
+// MVP visual flight times. These are deliberately centralized so gameplay,
+// calibration and future animation use one clock. They are not claimed to be
+// a full aerodynamic reconstruction of a specific real pitch speed.
+export const FLIGHT_MS = Object.freeze({
+  FAST: 520,
+  CURVE: 610,
+  FORK: 575
+});
+
+export function flightMs(pitch) {
+  return pitch.flightMs ?? FLIGHT_MS[pitch.type] ?? FLIGHT_MS.FAST;
+}
+
+export function progressAtElapsed(pitch, elapsedMs) {
+  return clamp(elapsedMs / flightMs(pitch), 0, 1);
+}
 
 export function pitchPoint(pitch, t) {
   const u = clamp(t, 0, 1);
   const a = pitch.release;
   const b = pitch.target;
 
-  // Longitudinal progress stays monotonic and non-zero at both ends.
-  // This is intentionally geometric rather than a full aerodynamics solver.
+  // Longitudinal progress is linear. The previous game prototype used a
+  // smoothstep here, which made the ball unrealistically start and finish
+  // with zero forward speed. Break shape is handled separately below.
   const p = {
     x: lerp(a.x, b.x, u),
     y: lerp(a.y, b.y, u),
@@ -27,14 +45,18 @@ export function pitchPoint(pitch, t) {
     p.x += (pitch.breakX ?? 0.30) * (pitch.dir ?? 1) * late;
     p.y += (pitch.breakY ?? 0.10) * arch;
   } else if (pitch.type === 'FORK') {
-    // Positive early lift relative to the release→target chord, then it
-    // disappears at the target; visually this produces a late drop.
+    // Relative to the release→target chord, this stays higher early and
+    // converges late, producing a readable late drop without endpoint drift.
     p.y += (pitch.breakY ?? 0.20) * arch * (1 - 0.55 * u);
   } else {
     p.y += (pitch.breakY ?? 0.055) * arch;
   }
 
   return p;
+}
+
+export function pointAtElapsed(pitch, elapsedMs) {
+  return pitchPoint(pitch, progressAtElapsed(pitch, elapsedMs));
 }
 
 export function endpointError(pitch) {
@@ -56,4 +78,17 @@ export function isMonotonicTowardPlate(pitch, samples = 120) {
     prev = z;
   }
   return true;
+}
+
+export function longitudinalStepSpread(pitch, samples = 120) {
+  // A value near zero means equal time steps advance equally toward home.
+  const steps=[];
+  let prev=pitchPoint(pitch,0).z;
+  for(let i=1;i<=samples;i++){
+    const z=pitchPoint(pitch,i/samples).z;
+    steps.push(Math.abs(z-prev));
+    prev=z;
+  }
+  const min=Math.min(...steps),max=Math.max(...steps);
+  return max-min;
 }
