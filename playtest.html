@@ -31,6 +31,24 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
 .meter{font-size:8px;color:#9eacb7}.track{height:7px;margin-top:5px;background:#15212a}.fill{height:100%;width:0;background:var(--contact)}.power{background:var(--power)}
 .overlay{position:absolute;inset:0;display:grid;place-items:center;padding:18px;background:#04080cda;z-index:8}.card{width:min(92%,390px);padding:18px 16px;border:1px solid #465866;background:linear-gradient(#17222c,#0f171f);box-shadow:7px 7px 0 #020304}.eyebrow{font-size:8px;color:#f4d15d;letter-spacing:.18em;font-weight:900}.card h1{font-size:25px;line-height:1.18;margin:8px 0 10px}.card p{font:12px/1.7 system-ui,sans-serif;color:#b5c0ca;margin:0}.card button{width:100%;min-height:46px;margin-top:14px;border:1px solid #fff0a8;background:#f4d15d;color:#17140a;font:900 12px ui-monospace,monospace}
 @media(min-width:720px){.grid{grid-template-columns:1fr 1fr}.cal{left:auto;width:470px}.app{border-left:1px solid #24313b;border-right:1px solid #24313b}}
+@media(min-width:1200px){
+  body{justify-content:flex-start;padding-left:calc(50vw - 534px)}
+  .app{width:620px;flex:0 0 620px}
+  .cal{
+    position:fixed;
+    left:calc(50vw + 104px);
+    right:auto;
+    top:12px;
+    bottom:12px;
+    width:430px;
+    max-height:none;
+    overflow:auto;
+    inset:auto auto 12px calc(50vw + 104px);
+    background:#081017f7;
+    box-shadow:0 0 0 1px #18242d,10px 10px 28px #0008;
+  }
+  .calBtn{right:8px}
+}
 </style>
 </head>
 <body>
@@ -44,7 +62,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
 <section class="stage" id="stage">
   <canvas id="three"></canvas>
   <div class="hint">押して狙う → 長押しでCONTACT↑ / POWER↓ → 離してスイング</div>
-  <button id="calBtn" class="calBtn">CALIBRATE</button>
+  <button id="calBtn" class="calBtn">CALIBRATE →</button>
   <div id="cursor" class="cursor"></div>
   <div id="result" class="result"></div>
 
