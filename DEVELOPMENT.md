@@ -65,3 +65,14 @@ A 20-pitch batting-center session where:
 - contact quality produces understandable batted-ball outcomes,
 - targets / zones make those outcomes matter,
 - a full session is satisfying enough to replay for a better score.
+
+
+## Current prototype architecture
+
+- `debug-3d.html`: geometry / camera calibration source of truth.
+- `playtest.html`: playable Three.js batter-view prototype using the same physical field concept, with touch cursor + hold/release swing mechanic.
+- `playtest-legacy.html`: archived older 2D-projected playtest.
+- `pitch-model.js`: shared pitch trajectory math.
+- `swing-model.js`: shared hold/contact/power math.
+
+The playable prototype intentionally keeps a temporary CALIBRATE panel so eye position, gaze target and FOV can be tuned while pitches are moving. Remove or hide it only after the batter view is visually settled.
