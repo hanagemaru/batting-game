@@ -9,7 +9,12 @@ export const PLATE_FRONT=.4318;
 export const RUBBER_Z=18.44;
 export const BATTER_EYE=Object.freeze({x:.76,y:1.68,z:-.62});
 export const RELEASE_LOOK=Object.freeze({x:.18,y:1.82,z:16.80});
-export const BATTER_FOV_DEG=58;
+// Gameplay gaze is intentionally impact-biased rather than pitcher-centered.
+// A right-handed batter still sees the release in peripheral view, while the
+// plate-crossing area remains usable for the touch aiming mechanic.
+export const IMPACT_LOOK=Object.freeze({x:0,y:.95,z:1.50});
+export const BATTER_FOV_DEG=70;
+export const BATTER_FRAME_Y=.43;
 
 export const FLIGHT_MS=Object.freeze({FAST:520,CURVE:610,FORK:575});
 export function flightMs(pitch){return pitch.flightMs??FLIGHT_MS[pitch.type]??FLIGHT_MS.FAST}
@@ -39,13 +44,15 @@ const norm=a=>{const m=Math.hypot(a.x,a.y,a.z)||1;return{x:a.x/m,y:a.y/m,z:a.z/m
 // Returns the same camera basis the game should use. Keeping this here prevents
 // debug geometry and gameplay projection from silently drifting apart again.
 export function batterCamera(width,height,options={}){
-  const eye=options.eye??BATTER_EYE,look=options.look??RELEASE_LOOK;
+  const eye=options.eye??BATTER_EYE,look=options.look??IMPACT_LOOK;
   const fwd=norm(sub(look,eye));
-  const right=norm(cross({x:0,y:1,z:0},fwd));
-  const up=norm(cross(fwd,right));
+  // Camera looks toward +Z. For that convention, screen-right is fwd × world-up.
+  // The previous world-up × fwd basis mirrored the RH/LH view in the 2D playtest.
+  const right=norm(cross(fwd,{x:0,y:1,z:0}));
+  const up=norm(cross(right,fwd));
   const fovDeg=options.fovDeg??BATTER_FOV_DEG;
   const focal=(height*.5)/Math.tan((fovDeg*Math.PI/180)*.5);
-  return{eye,fwd,right,up,focal,cx:width*.5,cy:height*.48,fovDeg};
+  return{eye,fwd,right,up,focal,cx:width*.5,cy:height*(options.frameY??BATTER_FRAME_Y),fovDeg};
 }
 
 export function projectFromBatter(point,width,height,options={}){
@@ -58,6 +65,17 @@ export function strikeZoneCorners(low=.52,high=1.16){
   return[
     {x:-PLATE_HALF,y:high,z:PLATE_FRONT},{x:PLATE_HALF,y:high,z:PLATE_FRONT},
     {x:PLATE_HALF,y:low,z:PLATE_FRONT},{x:-PLATE_HALF,y:low,z:PLATE_FRONT}
+  ];
+}
+
+export function homePlateVertices(){
+  const shoulder=PLATE_HALF;
+  return[
+    {x:-PLATE_HALF,y:0,z:PLATE_FRONT},
+    {x: PLATE_HALF,y:0,z:PLATE_FRONT},
+    {x: PLATE_HALF,y:0,z:shoulder},
+    {x:0,y:0,z:0},
+    {x:-PLATE_HALF,y:0,z:shoulder}
   ];
 }
 
