@@ -23,8 +23,9 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
 .hint{position:absolute;left:50%;top:8px;transform:translateX(-50%);font-size:8px;color:#a7b4be;background:#061018b8;border:1px solid #2b3946;padding:5px 7px;white-space:nowrap;pointer-events:none;z-index:2}
 .calBtn{position:absolute;right:8px;top:8px;z-index:5;border:1px solid #415364;background:#0d1720dd;color:#d8e2ea;font:900 8px ui-monospace,monospace;padding:7px 8px}
 .cal{position:absolute;inset:auto 8px 8px 8px;max-height:67%;overflow:auto;background:#081017f2;border:1px solid #425361;padding:10px;z-index:6;display:none;backdrop-filter:blur(8px)}
-.cal.open{display:block}.cal h2{font-size:10px;margin:0 0 8px;letter-spacing:.12em}
-.grid{display:grid;grid-template-columns:1fr;gap:7px}.ctrl{display:grid;grid-template-columns:84px 1fr 48px;gap:7px;align-items:center}.ctrl label{font-size:8px;color:#aebbc5}.ctrl output{font-size:8px;text-align:right;color:#fff}input[type=range]{width:100%;accent-color:#8de7b1}
+.cal.open{display:block}.cal h2{font-size:10px;margin:0 0 8px;letter-spacing:.12em}.cal h2:not(:first-child){margin-top:14px;padding-top:10px;border-top:1px solid #2f3d49}
+.grid{display:grid;grid-template-columns:1fr;gap:8px}.ctrl{display:grid;grid-template-columns:98px 1fr 48px;gap:7px;align-items:center}.ctrl label{font-size:8px;color:#d3dde5;line-height:1.25}.ctrl label small{display:block;margin-top:2px;color:#718493;font:7px/1.35 system-ui,sans-serif}.ctrl output{font-size:8px;text-align:right;color:#fff}input[type=range]{width:100%;accent-color:#8de7b1}
+.devGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.devField{display:grid;gap:4px;font-size:8px;color:#aebbc5}.devField select{width:100%;min-height:36px;border:1px solid #415364;background:#111c25;color:#eef4f7;padding:0 8px;font:900 9px ui-monospace,monospace}.devNote{font:8px/1.55 system-ui,sans-serif;color:#8092a0;margin-top:7px}.devStatus{font-size:8px;color:#9fdcc1;margin-top:7px}
 .calActions{display:flex;gap:7px;margin-top:9px}.calActions button{flex:1;min-height:36px;border:1px solid #415364;background:#15212b;color:#eef4f7;font:900 9px ui-monospace,monospace}
 .meters{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:#081017}
 .meter{font-size:8px;color:#9eacb7}.track{height:7px;margin-top:5px;background:#15212a}.fill{height:100%;width:0;background:var(--contact)}.power{background:var(--power)}
@@ -35,7 +36,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
 <body>
 <div class="app">
 <header>
-  <div><div class="hlabel">PITCH</div><div class="hvalue"><span id="pitchNo">1</span><span style="font-size:10px;color:#71808d">/20</span></div></div>
+  <div><div class="hlabel">PITCH</div><div class="hvalue"><span id="pitchNo">0</span><span style="font-size:10px;color:#71808d"> / ∞</span></div></div>
   <div class="center"><div class="title">BATTER'S READ — 3D</div><div id="pitchInfo" class="pitchname">FAST</div></div>
   <div class="right"><div class="hlabel">SCORE</div><div id="score" class="hvalue">0000</div></div>
 </header>
@@ -48,24 +49,54 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
   <div id="result" class="result"></div>
 
   <aside id="cal" class="cal">
+    <h2>DEV PITCH CONTROL</h2>
+    <div class="devGrid">
+      <label class="devField">球種
+        <select id="pitchMode">
+          <option value="RANDOM">RANDOM</option>
+          <option value="FAST">FAST</option>
+          <option value="CURVE">CURVE</option>
+          <option value="FORK">FORK</option>
+        </select>
+      </label>
+      <label class="devField">コース（右打者基準）
+        <select id="courseMode">
+          <option value="RANDOM">RANDOM</option>
+          <option value="CENTER">CENTER</option>
+          <option value="INSIDE">INSIDE</option>
+          <option value="OUTSIDE">OUTSIDE</option>
+          <option value="HIGH">HIGH</option>
+          <option value="LOW">LOW</option>
+          <option value="IN_HIGH">IN-HIGH</option>
+          <option value="IN_LOW">IN-LOW</option>
+          <option value="OUT_HIGH">OUT-HIGH</option>
+          <option value="OUT_LOW">OUT-LOW</option>
+        </select>
+      </label>
+    </div>
+    <div class="calActions"><button id="throwNow">THROW NOW</button><button id="autoBtn">AUTO: ON / 3s</button></div>
+    <div id="devStatus" class="devStatus">AUTO投球: 3.0秒間隔</div>
+    <div class="devNote">INSIDE = 右打者に近い三塁側（+X）、OUTSIDE = 一塁側（−X）。選択は次の投球から反映します。</div>
+
     <h2>BATTER CAMERA CALIBRATION</h2>
     <div class="grid">
-      <div class="ctrl"><label>Eye X</label><input id="eyeX" type="range" min="0.35" max="1.20" step="0.01" value="0.76"><output></output></div>
-      <div class="ctrl"><label>Eye Y</label><input id="eyeY" type="range" min="1.40" max="1.90" step="0.01" value="1.68"><output></output></div>
-      <div class="ctrl"><label>Eye Z</label><input id="eyeZ" type="range" min="-1.30" max="0.20" step="0.01" value="-0.62"><output></output></div>
-      <div class="ctrl"><label>Look X</label><input id="lookX" type="range" min="-0.50" max="0.50" step="0.01" value="0.00"><output></output></div>
-      <div class="ctrl"><label>Look Y</label><input id="lookY" type="range" min="0.50" max="1.60" step="0.01" value="0.95"><output></output></div>
-      <div class="ctrl"><label>Look Z</label><input id="lookZ" type="range" min="0.43" max="8.00" step="0.01" value="1.50"><output></output></div>
-      <div class="ctrl"><label>FOV</label><input id="fov" type="range" min="40" max="80" step="1" value="70"><output></output></div>
+      <div class="ctrl"><label>Camera X <small>打者の目の左右位置。+で三塁側へ移動。</small></label><input id="eyeX" type="range" min="0.35" max="1.20" step="0.01" value="0.76"><output></output></div>
+      <div class="ctrl"><label>Camera Y <small>打者の目の高さ。+で高くなる。</small></label><input id="eyeY" type="range" min="1.40" max="1.90" step="0.01" value="1.68"><output></output></div>
+      <div class="ctrl"><label>Camera Z <small>打者の目の前後位置。+で投手側へ移動。</small></label><input id="eyeZ" type="range" min="-1.30" max="0.20" step="0.01" value="-0.62"><output></output></div>
+      <div class="ctrl"><label>Look X <small>カメラが見る点の左右。カメラ位置は動かさない。</small></label><input id="lookX" type="range" min="-0.50" max="0.50" step="0.01" value="0.00"><output></output></div>
+      <div class="ctrl"><label>Look Y <small>見る点の高さ。下げるほどインパクト帯を見る。</small></label><input id="lookY" type="range" min="0.50" max="1.60" step="0.01" value="0.95"><output></output></div>
+      <div class="ctrl"><label>Look Z <small>見る点の奥行。小さいほどホーム付近、大きいほど投手側。</small></label><input id="lookZ" type="range" min="0.43" max="8.00" step="0.01" value="1.50"><output></output></div>
+      <div class="ctrl"><label>FOV <small>縦方向の視野角。+で広角になり全体が小さく見える。</small></label><input id="fov" type="range" min="40" max="80" step="1" value="70"><output></output></div>
     </div>
-    <div class="calActions"><button id="resetCam">RESET</button><button id="closeCal">CLOSE</button></div>
+    <div class="devNote">Camera X / Y / Z が「打者の目＝カメラ本体」の位置です。Look X / Y / Z は、その位置からどこを向くかだけを変えます。</div>
+    <div class="calActions"><button id="resetCam">RESET CAMERA</button><button id="closeCal">CLOSE</button></div>
   </aside>
 
   <div id="start" class="overlay">
     <div class="card">
       <div class="eyebrow">THREE.JS PLAYTEST</div>
       <h1>3D打者視点で<br>そのまま打つ。</h1>
-      <p>3D検証ページと同じ空間をプレイ画面にしました。球の位置を押して狙い、長押し中はカーソルを動かせます。長く待つほどミート範囲は広がりますが、パワーは落ちます。</p>
+      <p>開発用モードです。投球は無制限で3秒ごと。右上のCALIBRATEから、球種・コース・打者の目の位置・視線方向・FOVを球を見ながら調整できます。</p>
       <button id="startBtn">START</button>
     </div>
   </div>
@@ -88,7 +119,7 @@ import * as THREE from 'three';
 import {PLATE_HALF,PLATE_FRONT,FLIGHT_MS,pitchPoint} from './pitch-model.js';
 import {holdState,swingQuality,contactLabel,basePoints} from './swing-model.js';
 
-const TOTAL=20;
+const INTERVAL_MS=3000;
 const stage=document.querySelector('#stage'),canvas=document.querySelector('#three');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -156,6 +187,15 @@ const STORAGE='batting-camera-v1';
 try{Object.assign(cfg,JSON.parse(localStorage.getItem(STORAGE)||'{}'))}catch(e){}
 for(const id of controlsIds){ctl[id].value=cfg[id]}
 
+const DEV_STORAGE='batting-dev-v1';
+const dev={pitchMode:'RANDOM',courseMode:'RANDOM',auto:true};
+try{Object.assign(dev,JSON.parse(localStorage.getItem(DEV_STORAGE)||'{}'))}catch(e){}
+const pitchMode=document.getElementById('pitchMode'),courseMode=document.getElementById('courseMode'),autoBtn=document.getElementById('autoBtn'),devStatus=document.getElementById('devStatus');
+pitchMode.value=dev.pitchMode;courseMode.value=dev.courseMode;
+function saveDev(){try{localStorage.setItem(DEV_STORAGE,JSON.stringify(dev))}catch(e){}}
+function syncDevUI(){autoBtn.textContent=dev.auto?'AUTO: ON / 3s':'AUTO: OFF';pitchMode.value=dev.pitchMode;courseMode.value=dev.courseMode}
+syncDevUI();
+
 function applyCamera(){
   for(const id of controlsIds){cfg[id]=Number(ctl[id].value);ctl[id].nextElementSibling.value=id==='fov'?Math.round(cfg[id])+'°':cfg[id].toFixed(2)}
   camera.position.set(cfg.eyeX,cfg.eyeY,cfg.eyeZ);
@@ -173,33 +213,45 @@ const ui={
  cal:document.getElementById('cal'),start:document.getElementById('start')
 };
 
-let S={phase:'idle',n:0,score:0,pitch:null,t0:0,input:null,locked:false};
+let S={phase:'idle',n:0,score:0,pitch:null,t0:0,nextDue:0,input:null,locked:false};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rand=(a,b)=>a+Math.random()*(b-a);
 
+function selectedType(){
+  if(dev.pitchMode!=='RANDOM')return dev.pitchMode;
+  const names=['FAST','FAST','FAST','CURVE','CURVE','FORK'];
+  return names[Math.floor(Math.random()*names.length)];
+}
+function selectedTarget(){
+  if(dev.courseMode==='RANDOM')return{x:rand(-PLATE_HALF+.035,PLATE_HALF-.035),y:rand(.56,1.12),z:PLATE_FRONT,label:'RANDOM'};
+  const presets={
+    CENTER:[0,.84],INSIDE:[.15,.84],OUTSIDE:[-.15,.84],HIGH:[0,1.07],LOW:[0,.60],
+    IN_HIGH:[.15,1.07],IN_LOW:[.15,.60],OUT_HIGH:[-.15,1.07],OUT_LOW:[-.15,.60]
+  };
+  const p=presets[dev.courseMode]||presets.CENTER;
+  return{x:p[0]+rand(-.018,.018),y:p[1]+rand(-.025,.025),z:PLATE_FRONT,label:dev.courseMode};
+}
 function makePitch(){
-  const names=['FAST','FAST','FAST','CURVE','CURVE','FORK'],type=names[Math.floor(Math.random()*names.length)];
+  const type=selectedType(),target=selectedTarget();
   return{
-    type,
+    type,course:target.label,
     release:{x:rand(.08,.28),y:rand(1.72,1.90),z:rand(16.55,17.05)},
-    target:{x:rand(-PLATE_HALF+.04,PLATE_HALF-.04),y:rand(.56,1.12),z:PLATE_FRONT},
+    target,
     dir:Math.random()<.5?-1:1,
     breakX:type==='CURVE'?rand(.18,.30):0,
     breakY:type==='FORK'?rand(.16,.23):type==='CURVE'?rand(.07,.13):.055
   };
 }
-function nextPitch(){
-  if(S.n>=TOTAL){finish();return}
-  S.n++;S.pitch=makePitch();S.t0=performance.now();S.input=null;S.locked=false;S.phase='pitching';
-  ui.pitchNo.textContent=S.n;ui.pitchInfo.textContent=S.pitch.type+' · '+FLIGHT_MS[S.pitch.type]+'ms';ui.result.classList.remove('on');ui.result.textContent='';
+function nextPitch(now=performance.now()){
+  S.n++;S.pitch=makePitch();S.t0=now;S.nextDue=now+INTERVAL_MS;S.input=null;S.locked=false;S.phase='pitching';
+  ball.visible=true;for(const t of trail)t.visible=true;
+  ui.pitchNo.textContent=S.n;
+  ui.pitchInfo.textContent=S.pitch.type+' · '+S.pitch.course+' · '+FLIGHT_MS[S.pitch.type]+'ms';
+  ui.result.classList.remove('on');ui.result.textContent='';
 }
 function begin(){
-  S={phase:'ready',n:0,score:0,pitch:null,t0:0,input:null,locked:false};
-  ui.score.textContent='0000';ui.pitchNo.textContent='1';ui.start.style.display='none';setTimeout(nextPitch,450)
-}
-function finish(){
-  S.phase='end';S.locked=true;
-  ui.result.innerHTML='GAME SET<small>'+String(S.score).padStart(4,'0')+' PTS</small>';ui.result.classList.add('on');
-  setTimeout(()=>{ui.start.style.display='grid';document.querySelector('#start h1').innerHTML='もう一度<br>3Dで打つ。';document.querySelector('#startBtn').textContent='PLAY AGAIN'},1100)
+  S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:0,input:null,locked:false};
+  ui.score.textContent='0000';ui.pitchNo.textContent='0';ui.start.style.display='none';
+  nextPitch(performance.now()+250)
 }
 
 function pitchPosition(u){
@@ -220,10 +272,10 @@ function swing(now){
   const q=swingQuality({distancePx:Math.hypot(p.x-S.input.x,p.y-S.input.y),timingError:1-u,holdMs:hold});
   const label=contactLabel(q.contactQuality),pts=basePoints(q.contactQuality);
   S.score+=pts;ui.score.textContent=String(S.score).padStart(4,'0');
-  S.locked=true;S.phase='result';hideCursor();
+  S.locked=true;S.phase='waiting';hideCursor();ball.visible=false;for(const t of trail)t.visible=false;
   ui.result.innerHTML=label+'<small>'+pts+' PTS · POWER '+Math.round(q.power*100)+'</small>';ui.result.classList.add('on');
   ui.contact.style.width='0%';ui.power.style.width=Math.round(q.power*100)+'%';
-  setTimeout(()=>{ui.result.classList.remove('on');setTimeout(nextPitch,260)},650)
+  setTimeout(()=>ui.result.classList.remove('on'),650)
 }
 
 canvas.addEventListener('pointerdown',e=>{
@@ -242,6 +294,16 @@ canvas.addEventListener('pointercancel',e=>{if(!S.input||e.pointerId!==S.input.i
 document.getElementById('calBtn').onclick=()=>ui.cal.classList.toggle('open');
 document.getElementById('closeCal').onclick=()=>ui.cal.classList.remove('open');
 document.getElementById('resetCam').onclick=()=>{for(const id of controlsIds)ctl[id].value=cfgDefaults[id];applyCamera()};
+pitchMode.onchange=()=>{dev.pitchMode=pitchMode.value;saveDev();syncDevUI()};
+courseMode.onchange=()=>{dev.courseMode=courseMode.value;saveDev();syncDevUI()};
+autoBtn.onclick=()=>{
+  dev.auto=!dev.auto;saveDev();syncDevUI();
+  if(dev.auto&&S.phase!=='pitching'&&ui.start.style.display==='none')S.nextDue=performance.now()+300;
+};
+document.getElementById('throwNow').onclick=()=>{
+  if(ui.start.style.display!=='none')return;
+  hideCursor();S.input=null;nextPitch(performance.now());
+};
 document.getElementById('startBtn').onclick=begin;
 
 function resize(){
@@ -251,6 +313,9 @@ new ResizeObserver(resize).observe(stage);resize();
 
 function animate(now){
   requestAnimationFrame(animate);
+
+  if(dev.auto&&ui.start.style.display==='none'&&S.phase!=='pitching'&&now>=S.nextDue)nextPitch(now);
+
   if(S.phase==='pitching'&&!S.locked){
     const u=(now-S.t0)/FLIGHT_MS[S.pitch.type];
     ball.position.copy(pitchPosition(u));
@@ -262,12 +327,19 @@ function animate(now){
       ui.contact.style.width=Math.round(st.u*100)+'%';ui.power.style.width=Math.round(st.power*100)+'%'
     }else{ui.contact.style.width='0%';ui.power.style.width='100%';hideCursor()}
     if(u>1.12){
-      S.locked=true;S.phase='result';hideCursor();ui.result.innerHTML='TAKE<small>0 PTS</small>';ui.result.classList.add('on');
-      setTimeout(()=>{ui.result.classList.remove('on');setTimeout(nextPitch,260)},520)
+      S.locked=true;S.phase='waiting';hideCursor();ball.visible=false;for(const t of trail)t.visible=false;
+      ui.result.innerHTML='TAKE<small>0 PTS</small>';ui.result.classList.add('on');
+      setTimeout(()=>ui.result.classList.remove('on'),520)
     }
-  }else{
-    if(S.phase==='idle'||S.phase==='ready'){ball.position.set(.18,1.82,16.8);for(const t of trail)t.visible=false}
+  }else if(S.phase==='idle'||S.phase==='ready'||S.phase==='waiting'){
+    ball.visible=false;for(const t of trail)t.visible=false;hideCursor();
   }
+
+  const remain=dev.auto&&ui.start.style.display==='none'?Math.max(0,S.nextDue-now):0;
+  devStatus.textContent=dev.auto
+    ?'AUTO投球: 3.0秒間隔 / 次まで '+(remain/1000).toFixed(1)+'s / '+dev.pitchMode+' / '+dev.courseMode
+    :'AUTO停止中 / THROW NOWで1球 / '+dev.pitchMode+' / '+dev.courseMode;
+
   renderer.render(scene,camera);
 }
 requestAnimationFrame(animate);
