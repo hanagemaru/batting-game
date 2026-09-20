@@ -1,0 +1,12 @@
+# local environment / secrets
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+
+# dependencies / generated files
+node_modules/
+dist/
+
+# misc
+.DS_Store
