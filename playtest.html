@@ -1,34 +1,276 @@
 <!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><title>BATTER'S READ — model playtest</title><style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071017;color:#eef4f7;font-family:ui-monospace,monospace;touch-action:none}main{height:100dvh;display:grid;grid-template-rows:48px 1fr 58px;max-width:560px;margin:auto}header{display:flex;align-items:center;justify-content:space-between;padding:0 12px;border-bottom:1px solid #31404b;font-size:11px}canvas{width:100%;height:100%;display:block}.hud{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 10px;border-top:1px solid #31404b}.meter{font-size:8px;color:#9eacb7}.track{height:7px;margin-top:5px;background:#15212a}.fill{height:100%;width:0;background:#8de7b1}.power{background:#f4d15d}.result{position:fixed;top:17%;left:50%;transform:translateX(-50%);font-size:30px;font-weight:900;text-shadow:0 2px #000;pointer-events:none}.note{position:fixed;top:54px;left:50%;transform:translateX(-50%);font-size:8px;color:#9eacb7;white-space:nowrap;pointer-events:none}
-</style></head><body><main><header><b>MODEL PLAYTEST</b><span id="info">FAST</span></header><canvas id="c"></canvas><div class="hud"><div class="meter">CONTACT<div class="track"><div id="contact" class="fill"></div></div></div><div class="meter">POWER<div class="track"><div id="power" class="fill power"></div></div></div></div></main><div class="note">RIGHT-HANDED BATTER POV · impact-biased view · 押して狙う → 待つほど広い / 弱い</div><div id="result" class="result"></div>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#081017">
+<title>BATTER'S READ — 3D Playtest</title>
+<style>
+:root{color-scheme:dark;--bg:#071017;--panel:#0c151d;--line:#2b3946;--muted:#8fa0ad;--text:#eef4f7;--contact:#8de7b1;--power:#f4d15d}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;touch-action:none}
+body{display:flex;justify-content:center}
+.app{width:min(100%,620px);height:100dvh;display:grid;grid-template-rows:54px 1fr 58px;background:#05090d}
+header{display:grid;grid-template-columns:78px 1fr 92px;align-items:center;padding:max(6px,env(safe-area-inset-top)) 10px 4px;border-bottom:1px solid var(--line);background:#081017e8;z-index:4}
+.hlabel{font-size:8px;color:#7f919f;letter-spacing:.12em}.hvalue{font-size:17px;font-weight:900;margin-top:2px}.center{text-align:center}.title{font-size:11px;font-weight:900;letter-spacing:.12em}.pitchname{font-size:8px;color:#aebbc5;margin-top:3px}.right{text-align:right}
+.stage{position:relative;min-height:0;overflow:hidden;background:#071017}
+canvas{width:100%;height:100%;display:block;touch-action:none}
+.result{position:absolute;top:15%;left:50%;transform:translateX(-50%);font-size:34px;font-weight:1000;text-align:center;text-shadow:0 3px #000;pointer-events:none;opacity:0;z-index:3}
+.result.on{opacity:1}.result small{display:block;font-size:9px;margin-top:4px;letter-spacing:.12em}
+.cursor{position:absolute;width:30px;height:30px;border:2px solid var(--contact);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:3}
+.cursor:before,.cursor:after{content:"";position:absolute;left:50%;top:50%;background:#fff;transform:translate(-50%,-50%)}
+.cursor:before{width:12px;height:1px}.cursor:after{width:1px;height:12px}
+.hint{position:absolute;left:50%;top:8px;transform:translateX(-50%);font-size:8px;color:#a7b4be;background:#061018b8;border:1px solid #2b3946;padding:5px 7px;white-space:nowrap;pointer-events:none;z-index:2}
+.calBtn{position:absolute;right:8px;top:8px;z-index:5;border:1px solid #415364;background:#0d1720dd;color:#d8e2ea;font:900 8px ui-monospace,monospace;padding:7px 8px}
+.cal{position:absolute;inset:auto 8px 8px 8px;max-height:67%;overflow:auto;background:#081017f2;border:1px solid #425361;padding:10px;z-index:6;display:none;backdrop-filter:blur(8px)}
+.cal.open{display:block}.cal h2{font-size:10px;margin:0 0 8px;letter-spacing:.12em}
+.grid{display:grid;grid-template-columns:1fr;gap:7px}.ctrl{display:grid;grid-template-columns:84px 1fr 48px;gap:7px;align-items:center}.ctrl label{font-size:8px;color:#aebbc5}.ctrl output{font-size:8px;text-align:right;color:#fff}input[type=range]{width:100%;accent-color:#8de7b1}
+.calActions{display:flex;gap:7px;margin-top:9px}.calActions button{flex:1;min-height:36px;border:1px solid #415364;background:#15212b;color:#eef4f7;font:900 9px ui-monospace,monospace}
+.meters{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:#081017}
+.meter{font-size:8px;color:#9eacb7}.track{height:7px;margin-top:5px;background:#15212a}.fill{height:100%;width:0;background:var(--contact)}.power{background:var(--power)}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;padding:18px;background:#04080cda;z-index:8}.card{width:min(92%,390px);padding:18px 16px;border:1px solid #465866;background:linear-gradient(#17222c,#0f171f);box-shadow:7px 7px 0 #020304}.eyebrow{font-size:8px;color:#f4d15d;letter-spacing:.18em;font-weight:900}.card h1{font-size:25px;line-height:1.18;margin:8px 0 10px}.card p{font:12px/1.7 system-ui,sans-serif;color:#b5c0ca;margin:0}.card button{width:100%;min-height:46px;margin-top:14px;border:1px solid #fff0a8;background:#f4d15d;color:#17140a;font:900 12px ui-monospace,monospace}
+@media(min-width:720px){.grid{grid-template-columns:1fr 1fr}.cal{left:auto;width:470px}.app{border-left:1px solid #24313b;border-right:1px solid #24313b}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div><div class="hlabel">PITCH</div><div class="hvalue"><span id="pitchNo">1</span><span style="font-size:10px;color:#71808d">/20</span></div></div>
+  <div class="center"><div class="title">BATTER'S READ — 3D</div><div id="pitchInfo" class="pitchname">FAST</div></div>
+  <div class="right"><div class="hlabel">SCORE</div><div id="score" class="hvalue">0000</div></div>
+</header>
+
+<section class="stage" id="stage">
+  <canvas id="three"></canvas>
+  <div class="hint">押して狙う → 長押しでCONTACT↑ / POWER↓ → 離してスイング</div>
+  <button id="calBtn" class="calBtn">CALIBRATE</button>
+  <div id="cursor" class="cursor"></div>
+  <div id="result" class="result"></div>
+
+  <aside id="cal" class="cal">
+    <h2>BATTER CAMERA CALIBRATION</h2>
+    <div class="grid">
+      <div class="ctrl"><label>Eye X</label><input id="eyeX" type="range" min="0.35" max="1.20" step="0.01" value="0.76"><output></output></div>
+      <div class="ctrl"><label>Eye Y</label><input id="eyeY" type="range" min="1.40" max="1.90" step="0.01" value="1.68"><output></output></div>
+      <div class="ctrl"><label>Eye Z</label><input id="eyeZ" type="range" min="-1.30" max="0.20" step="0.01" value="-0.62"><output></output></div>
+      <div class="ctrl"><label>Look X</label><input id="lookX" type="range" min="-0.50" max="0.50" step="0.01" value="0.00"><output></output></div>
+      <div class="ctrl"><label>Look Y</label><input id="lookY" type="range" min="0.50" max="1.60" step="0.01" value="0.95"><output></output></div>
+      <div class="ctrl"><label>Look Z</label><input id="lookZ" type="range" min="0.43" max="8.00" step="0.01" value="1.50"><output></output></div>
+      <div class="ctrl"><label>FOV</label><input id="fov" type="range" min="40" max="80" step="1" value="70"><output></output></div>
+    </div>
+    <div class="calActions"><button id="resetCam">RESET</button><button id="closeCal">CLOSE</button></div>
+  </aside>
+
+  <div id="start" class="overlay">
+    <div class="card">
+      <div class="eyebrow">THREE.JS PLAYTEST</div>
+      <h1>3D打者視点で<br>そのまま打つ。</h1>
+      <p>3D検証ページと同じ空間をプレイ画面にしました。球の位置を押して狙い、長押し中はカーソルを動かせます。長く待つほどミート範囲は広がりますが、パワーは落ちます。</p>
+      <button id="startBtn">START</button>
+    </div>
+  </div>
+</section>
+
+<div class="meters">
+  <div class="meter">CONTACT<div class="track"><div id="contact" class="fill"></div></div></div>
+  <div class="meter">POWER<div class="track"><div id="power" class="fill power"></div></div></div>
+</div>
+</div>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
+}}
+</script>
+
 <script type="module">
-import {PLATE_HALF,PLATE_FRONT,FLIGHT_MS,pitchPoint,projectFromBatter,strikeZoneCorners,homePlateVertices} from './pitch-model.js';
-import {holdState,swingQuality,contactLabel} from './swing-model.js';
-const c=document.querySelector('#c'),ctx=c.getContext('2d'),info=document.querySelector('#info'),res=document.querySelector('#result'),cm=document.querySelector('#contact'),pm=document.querySelector('#power');
-let dpr=1,W=1,H=1,input=null,t0=performance.now(),pitch=null,locked=false;
+import * as THREE from 'three';
+import {PLATE_HALF,PLATE_FRONT,FLIGHT_MS,pitchPoint} from './pitch-model.js';
+import {holdState,swingQuality,contactLabel,basePoints} from './swing-model.js';
+
+const TOTAL=20;
+const stage=document.querySelector('#stage'),canvas=document.querySelector('#three');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.shadowMap.enabled=true;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x081017);
+scene.fog=new THREE.Fog(0x081017,24,48);
+scene.add(new THREE.HemisphereLight(0xbfdcff,0x24301f,2.0));
+const sun=new THREE.DirectionalLight(0xffffff,2.2);sun.position.set(-6,10,-4);scene.add(sun);
+
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(28,46),new THREE.MeshStandardMaterial({color:0x264332,roughness:1}));
+ground.rotation.x=-Math.PI/2;ground.position.z=8.5;scene.add(ground);
+const dirt=new THREE.Mesh(new THREE.CircleGeometry(4.1,64),new THREE.MeshStandardMaterial({color:0x6b523d,roughness:1}));
+dirt.rotation.x=-Math.PI/2;dirt.position.set(0,.006,0);dirt.scale.set(1,1.3,1);scene.add(dirt);
+
+const INCH=.0254,FOOT=.3048,PLATE_SHOULDER=PLATE_HALF;
+const pverts=new Float32Array([
+  -PLATE_HALF,.018,PLATE_FRONT, PLATE_HALF,.018,PLATE_FRONT, PLATE_HALF,.018,PLATE_SHOULDER,
+  0,.018,0, -PLATE_HALF,.018,PLATE_SHOULDER
+]);
+const plateGeo=new THREE.BufferGeometry();plateGeo.setAttribute('position',new THREE.BufferAttribute(pverts,3));plateGeo.setIndex([0,1,2,0,2,4,4,2,3]);plateGeo.computeVertexNormals();
+scene.add(new THREE.Mesh(plateGeo,new THREE.MeshStandardMaterial({color:0xffffff,side:THREE.DoubleSide})));
+
+function lineRect(x1,x2,z1,z2,color=0xffffff){
+  const pts=[new THREE.Vector3(x1,.025,z1),new THREE.Vector3(x2,.025,z1),new THREE.Vector3(x2,.025,z2),new THREE.Vector3(x1,.025,z2),new THREE.Vector3(x1,.025,z1)];
+  return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color,transparent:true,opacity:.72}));
+}
+const BOX_INNER=PLATE_HALF+6*INCH,BOX_OUTER=BOX_INNER+4*FOOT,BOX_CENTER_Z=PLATE_FRONT/2,BOX_HALF_LEN=3*FOOT;
+scene.add(lineRect(-BOX_OUTER,-BOX_INNER,BOX_CENTER_Z-BOX_HALF_LEN,BOX_CENTER_Z+BOX_HALF_LEN,0xded8c8));
+scene.add(lineRect( BOX_INNER, BOX_OUTER,BOX_CENTER_Z-BOX_HALF_LEN,BOX_CENTER_Z+BOX_HALF_LEN,0xded8c8));
+
+const foulGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-7,.03,7),new THREE.Vector3(0,.03,0),new THREE.Vector3(7,.03,7)]);
+scene.add(new THREE.Line(foulGeo,new THREE.LineBasicMaterial({color:0xece7da,transparent:true,opacity:.36})));
+
+const zonePts=[
+  new THREE.Vector3(-PLATE_HALF,.52,PLATE_FRONT),new THREE.Vector3(PLATE_HALF,.52,PLATE_FRONT),
+  new THREE.Vector3(PLATE_HALF,1.16,PLATE_FRONT),new THREE.Vector3(-PLATE_HALF,1.16,PLATE_FRONT),
+  new THREE.Vector3(-PLATE_HALF,.52,PLATE_FRONT)
+];
+scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(zonePts),new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.62})));
+
+const pitcher=new THREE.Group();
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(.18,.72,5,10),new THREE.MeshStandardMaterial({color:0x485c6d}));
+body.position.y=1.03;pitcher.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.13,18,12),new THREE.MeshStandardMaterial({color:0xd7b08a}));
+head.position.y=1.58;pitcher.add(head);
+pitcher.position.set(0,0,18.09);scene.add(pitcher);
+const rubber=new THREE.Mesh(new THREE.BoxGeometry(24*INCH,.025,6*INCH),new THREE.MeshStandardMaterial({color:0xe8e5dc}));
+rubber.position.set(0,.018,18.44+3*INCH);scene.add(rubber);
+
+const ball=new THREE.Mesh(new THREE.SphereGeometry(.0365,20,14),new THREE.MeshStandardMaterial({color:0xf7f3e9,roughness:.55}));
+scene.add(ball);
+
+const trail=[];
+for(let i=0;i<6;i++){const m=new THREE.Mesh(new THREE.SphereGeometry(.028,12,8),new THREE.MeshBasicMaterial({color:0xbfe5ff,transparent:true,opacity:.11+i*.02}));scene.add(m);trail.push(m)}
+
+const camera=new THREE.PerspectiveCamera(70,1,.03,80);
+const cfg={eyeX:.76,eyeY:1.68,eyeZ:-.62,lookX:0,lookY:.95,lookZ:1.50,fov:70};
+const cfgDefaults={...cfg};
+const controlsIds=['eyeX','eyeY','eyeZ','lookX','lookY','lookZ','fov'];
+const ctl=Object.fromEntries(controlsIds.map(id=>[id,document.getElementById(id)]));
+const STORAGE='batting-camera-v1';
+try{Object.assign(cfg,JSON.parse(localStorage.getItem(STORAGE)||'{}'))}catch(e){}
+for(const id of controlsIds){ctl[id].value=cfg[id]}
+
+function applyCamera(){
+  for(const id of controlsIds){cfg[id]=Number(ctl[id].value);ctl[id].nextElementSibling.value=id==='fov'?Math.round(cfg[id])+'°':cfg[id].toFixed(2)}
+  camera.position.set(cfg.eyeX,cfg.eyeY,cfg.eyeZ);
+  camera.fov=cfg.fov;
+  camera.lookAt(cfg.lookX,cfg.lookY,cfg.lookZ);
+  camera.updateProjectionMatrix();
+  try{localStorage.setItem(STORAGE,JSON.stringify(cfg))}catch(e){}
+}
+controlsIds.forEach(id=>ctl[id].addEventListener('input',applyCamera));
+applyCamera();
+
+const ui={
+ pitchNo:document.getElementById('pitchNo'),score:document.getElementById('score'),pitchInfo:document.getElementById('pitchInfo'),
+ cursor:document.getElementById('cursor'),result:document.getElementById('result'),contact:document.getElementById('contact'),power:document.getElementById('power'),
+ cal:document.getElementById('cal'),start:document.getElementById('start')
+};
+
+let S={phase:'idle',n:0,score:0,pitch:null,t0:0,input:null,locked:false};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rand=(a,b)=>a+Math.random()*(b-a);
-function resize(){const r=c.getBoundingClientRect();dpr=Math.min(2,devicePixelRatio||1);W=r.width;H=r.height;c.width=W*dpr;c.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}new ResizeObserver(resize).observe(c);resize();
-function makePitch(){const names=['FAST','FAST','FAST','CURVE','CURVE','FORK'],type=names[Math.floor(Math.random()*names.length)];return{type,release:{x:rand(.08,.28),y:rand(1.72,1.90),z:rand(16.55,17.05)},target:{x:rand(-PLATE_HALF+.04,PLATE_HALF-.04),y:rand(.56,1.12),z:PLATE_FRONT},dir:Math.random()<.5?-1:1,breakX:type==='CURVE'?rand(.18,.30):0,breakY:type==='FORK'?rand(.16,.23):type==='CURVE'?rand(.07,.13):.055}}
-function next(){pitch=makePitch();t0=performance.now();locked=false;input=null;res.textContent='';info.textContent=pitch.type+' · '+FLIGHT_MS[pitch.type]+'ms'}next();
-function projectedAt(u){const p=pitchPoint(pitch,u),q=projectFromBatter(p,W,H);return q&&{...q,u}}
-function zone(){return strikeZoneCorners().map(p=>projectFromBatter(p,W,H))}
-function plate(){return homePlateVertices().map(p=>projectFromBatter(p,W,H))}
-function path(ps,close=false){const vs=ps.filter(Boolean);if(!vs.length)return;ctx.beginPath();ctx.moveTo(vs[0].x,vs[0].y);for(let i=1;i<vs.length;i++)ctx.lineTo(vs[i].x,vs[i].y);if(close)ctx.closePath()}
-function draw(now){ctx.clearRect(0,0,W,H);const grd=ctx.createLinearGradient(0,0,0,H);grd.addColorStop(0,'#1b303c');grd.addColorStop(.44,'#101a20');grd.addColorStop(.45,'#274632');grd.addColorStop(1,'#182d22');ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
- const hp=plate();ctx.fillStyle='#f4f1dfb8';ctx.strokeStyle='#ffffffb8';ctx.lineWidth=1.2;path(hp,true);ctx.fill();ctx.stroke();
- const z=zone();ctx.fillStyle='#ffffff06';ctx.strokeStyle='#ffffff72';ctx.lineWidth=1.4;path(z,true);ctx.fill();ctx.stroke();
- ctx.strokeStyle='#ffffff24';ctx.lineWidth=1;
- for(let i=1;i<3;i++){const a=i/3;
-   const l={x:z[0].x+(z[3].x-z[0].x)*a,y:z[0].y+(z[3].y-z[0].y)*a},r={x:z[1].x+(z[2].x-z[1].x)*a,y:z[1].y+(z[2].y-z[1].y)*a};
-   ctx.beginPath();ctx.moveTo(l.x,l.y);ctx.lineTo(r.x,r.y);ctx.stroke();
-   const t={x:z[0].x+(z[1].x-z[0].x)*a,y:z[0].y+(z[1].y-z[0].y)*a},b={x:z[3].x+(z[2].x-z[3].x)*a,y:z[3].y+(z[2].y-z[3].y)*a};
-   ctx.beginPath();ctx.moveTo(t.x,t.y);ctx.lineTo(b.x,b.y);ctx.stroke();
- }
- const elapsed=now-t0,u=elapsed/FLIGHT_MS[pitch.type];if(u<=1.12&&!locked){for(let i=6;i>=0;i--){const q=projectedAt(clamp(u-i*.018,0,1));if(!q)continue;ctx.globalAlpha=i?(.07*(7-i)):1;const r=clamp(110/q.depth,3,16);ctx.fillStyle=pitch.type==='CURVE'?'#a8ddff':pitch.type==='FORK'?'#ffd89b':'#fff';ctx.beginPath();ctx.arc(q.x,q.y,r,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1}
- if(input&&!locked){const st=holdState(now-input.down);cm.style.width=(st.u*100)+'%';pm.style.width=(st.power*100)+'%';ctx.strokeStyle='#8de7b1';ctx.setLineDash([5,4]);ctx.beginPath();ctx.arc(input.x,input.y,st.contactRadius,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='#fff';ctx.beginPath();ctx.moveTo(input.x-7,input.y);ctx.lineTo(input.x+7,input.y);ctx.moveTo(input.x,input.y-7);ctx.lineTo(input.x,input.y+7);ctx.stroke()}else if(!locked){cm.style.width='0%';pm.style.width='100%'}
- if(u>1.12&&!locked){locked=true;res.textContent='TAKE';setTimeout(next,550)}requestAnimationFrame(draw)}requestAnimationFrame(draw);
-c.addEventListener('pointerdown',e=>{if(locked||input)return;e.preventDefault();const r=c.getBoundingClientRect();input={id:e.pointerId,down:performance.now(),x:e.clientX-r.left,y:e.clientY-r.top};c.setPointerCapture?.(e.pointerId)});
-c.addEventListener('pointermove',e=>{if(!input||e.pointerId!==input.id)return;e.preventDefault();const r=c.getBoundingClientRect();input.x=clamp(e.clientX-r.left,0,W);input.y=clamp(e.clientY-r.top,0,H)});
-c.addEventListener('pointerup',e=>{if(!input||e.pointerId!==input.id||locked)return;e.preventDefault();const now=performance.now(),u=(now-t0)/FLIGHT_MS[pitch.type],b=projectedAt(clamp(u,0,1));if(!b)return;const q=swingQuality({distancePx:Math.hypot(b.x-input.x,b.y-input.y),timingError:1-u,holdMs:now-input.down});const label=contactLabel(q.contactQuality);locked=true;res.textContent=label+' · PWR '+Math.round(q.power*100);cm.style.width='0%';pm.style.width=(q.power*100)+'%';setTimeout(next,650)});
-</script></body></html>
+
+function makePitch(){
+  const names=['FAST','FAST','FAST','CURVE','CURVE','FORK'],type=names[Math.floor(Math.random()*names.length)];
+  return{
+    type,
+    release:{x:rand(.08,.28),y:rand(1.72,1.90),z:rand(16.55,17.05)},
+    target:{x:rand(-PLATE_HALF+.04,PLATE_HALF-.04),y:rand(.56,1.12),z:PLATE_FRONT},
+    dir:Math.random()<.5?-1:1,
+    breakX:type==='CURVE'?rand(.18,.30):0,
+    breakY:type==='FORK'?rand(.16,.23):type==='CURVE'?rand(.07,.13):.055
+  };
+}
+function nextPitch(){
+  if(S.n>=TOTAL){finish();return}
+  S.n++;S.pitch=makePitch();S.t0=performance.now();S.input=null;S.locked=false;S.phase='pitching';
+  ui.pitchNo.textContent=S.n;ui.pitchInfo.textContent=S.pitch.type+' · '+FLIGHT_MS[S.pitch.type]+'ms';ui.result.classList.remove('on');ui.result.textContent='';
+}
+function begin(){
+  S={phase:'ready',n:0,score:0,pitch:null,t0:0,input:null,locked:false};
+  ui.score.textContent='0000';ui.pitchNo.textContent='1';ui.start.style.display='none';setTimeout(nextPitch,450)
+}
+function finish(){
+  S.phase='end';S.locked=true;
+  ui.result.innerHTML='GAME SET<small>'+String(S.score).padStart(4,'0')+' PTS</small>';ui.result.classList.add('on');
+  setTimeout(()=>{ui.start.style.display='grid';document.querySelector('#start h1').innerHTML='もう一度<br>3Dで打つ。';document.querySelector('#startBtn').textContent='PLAY AGAIN'},1100)
+}
+
+function pitchPosition(u){
+  const p=pitchPoint(S.pitch,clamp(u,0,1));return new THREE.Vector3(p.x,p.y,p.z)
+}
+function ballScreen(){
+  const v=ball.position.clone().project(camera);
+  return{x:(v.x*.5+.5)*stage.clientWidth,y:(-.5*v.y+.5)*stage.clientHeight}
+}
+function setCursor(x,y,r){
+  ui.cursor.style.display='block';ui.cursor.style.left=x+'px';ui.cursor.style.top=y+'px';ui.cursor.style.width=(r*2)+'px';ui.cursor.style.height=(r*2)+'px'
+}
+function hideCursor(){ui.cursor.style.display='none'}
+
+function swing(now){
+  if(S.phase!=='pitching'||!S.input||S.locked)return;
+  const u=(now-S.t0)/FLIGHT_MS[S.pitch.type],p=ballScreen(),hold=now-S.input.down;
+  const q=swingQuality({distancePx:Math.hypot(p.x-S.input.x,p.y-S.input.y),timingError:1-u,holdMs:hold});
+  const label=contactLabel(q.contactQuality),pts=basePoints(q.contactQuality);
+  S.score+=pts;ui.score.textContent=String(S.score).padStart(4,'0');
+  S.locked=true;S.phase='result';hideCursor();
+  ui.result.innerHTML=label+'<small>'+pts+' PTS · POWER '+Math.round(q.power*100)+'</small>';ui.result.classList.add('on');
+  ui.contact.style.width='0%';ui.power.style.width=Math.round(q.power*100)+'%';
+  setTimeout(()=>{ui.result.classList.remove('on');setTimeout(nextPitch,260)},650)
+}
+
+canvas.addEventListener('pointerdown',e=>{
+  if(S.phase!=='pitching'||S.input||S.locked||ui.cal.classList.contains('open'))return;
+  e.preventDefault();const r=stage.getBoundingClientRect();
+  S.input={id:e.pointerId,down:performance.now(),x:e.clientX-r.left,y:e.clientY-r.top};
+  canvas.setPointerCapture?.(e.pointerId)
+},{passive:false});
+canvas.addEventListener('pointermove',e=>{
+  if(!S.input||e.pointerId!==S.input.id)return;e.preventDefault();const r=stage.getBoundingClientRect();
+  S.input.x=clamp(e.clientX-r.left,0,r.width);S.input.y=clamp(e.clientY-r.top,0,r.height)
+},{passive:false});
+canvas.addEventListener('pointerup',e=>{if(!S.input||e.pointerId!==S.input.id)return;e.preventDefault();swing(performance.now());S.input=null},{passive:false});
+canvas.addEventListener('pointercancel',e=>{if(!S.input||e.pointerId!==S.input.id)return;S.input=null;hideCursor()},{passive:false});
+
+document.getElementById('calBtn').onclick=()=>ui.cal.classList.toggle('open');
+document.getElementById('closeCal').onclick=()=>ui.cal.classList.remove('open');
+document.getElementById('resetCam').onclick=()=>{for(const id of controlsIds)ctl[id].value=cfgDefaults[id];applyCamera()};
+document.getElementById('startBtn').onclick=begin;
+
+function resize(){
+  const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()
+}
+new ResizeObserver(resize).observe(stage);resize();
+
+function animate(now){
+  requestAnimationFrame(animate);
+  if(S.phase==='pitching'&&!S.locked){
+    const u=(now-S.t0)/FLIGHT_MS[S.pitch.type];
+    ball.position.copy(pitchPosition(u));
+    for(let i=0;i<trail.length;i++){
+      const tu=clamp(u-(i+1)*.026,0,1);trail[i].position.copy(pitchPosition(tu));trail[i].visible=u<1.08
+    }
+    if(S.input){
+      const st=holdState(now-S.input.down);setCursor(S.input.x,S.input.y,st.contactRadius);
+      ui.contact.style.width=Math.round(st.u*100)+'%';ui.power.style.width=Math.round(st.power*100)+'%'
+    }else{ui.contact.style.width='0%';ui.power.style.width='100%';hideCursor()}
+    if(u>1.12){
+      S.locked=true;S.phase='result';hideCursor();ui.result.innerHTML='TAKE<small>0 PTS</small>';ui.result.classList.add('on');
+      setTimeout(()=>{ui.result.classList.remove('on');setTimeout(nextPitch,260)},520)
+    }
+  }else{
+    if(S.phase==='idle'||S.phase==='ready'){ball.position.set(.18,1.82,16.8);for(const t of trail)t.visible=false}
+  }
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
