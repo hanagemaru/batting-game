@@ -4,16 +4,24 @@
 <style>body{font:14px ui-monospace,monospace;background:#0a0e13;color:#e9eef3;padding:20px;line-height:1.6}main{max-width:720px;margin:auto}.ok{color:#7ce6ad}.bad{color:#ff8181}canvas{width:100%;height:320px;border:1px solid #34414d;background:#111820}code{color:#9edcff}.meta{color:#9ba8b5}</style>
 <main><h1>Pitch trajectory check</h1><p>Shared 3D trajectory and batter-eye camera invariants. Red = X lateral break, blue = Y height, gray = Z distance.</p><canvas id="c"></canvas><div id="out"></div></main>
 <script type="module">
-import {pitchPoint,pointAtElapsed,flightMs,endpointError,isMonotonicTowardPlate,longitudinalStepSpread,projectFromBatter,strikeZoneCorners,BATTER_EYE,PLATE_FRONT} from './pitch-model.js';
+import {pitchPoint,pointAtElapsed,flightMs,endpointError,isMonotonicTowardPlate,longitudinalStepSpread,projectFromBatter,strikeZoneCorners,homePlateVertices,batterCamera,BATTER_EYE,PLATE_FRONT,IMPACT_LOOK,BATTER_FOV_DEG} from './pitch-model.js';
 const pitch={type:'CURVE',release:{x:.18,y:1.82,z:16.8},target:{x:0,y:.82,z:PLATE_FRONT},dir:1};
 const err=endpointError(pitch),mono=isMonotonicTowardPlate(pitch),spread=longitudinalStepSpread(pitch),eps=1e-10,duration=flightMs(pitch);
 const timedEnd=pointAtElapsed(pitch,duration),timedErr=Math.hypot(timedEnd.x-pitch.target.x,timedEnd.y-pitch.target.y,timedEnd.z-pitch.target.z);
-const W=390,H=700,releaseScreen=projectFromBatter(pitch.release,W,H),targetScreen=projectFromBatter(pitch.target,W,H),zone=strikeZoneCorners().map(p=>projectFromBatter(p,W,H));
+const W=390,H=650,releaseScreen=projectFromBatter(pitch.release,W,H),targetScreen=projectFromBatter(pitch.target,W,H),zone=strikeZoneCorners().map(p=>projectFromBatter(p,W,H)),plate=homePlateVertices().map(p=>projectFromBatter(p,W,H)),cam=batterCamera(W,H);
 const finite=p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.depth>0;
+const inFrame=p=>finite(p)&&p.x>=0&&p.x<=W&&p.y>=0&&p.y<=H;
 const zoneFinite=zone.every(finite);
+const zoneInFrame=zone.every(inFrame);
 // A RH eye is on +X/third-base side; plate is physically much closer than release.
 const geometry=BATTER_EYE.x>0&&BATTER_EYE.z<0&&pitch.release.z>pitch.target.z;
 const perspective=finite(releaseScreen)&&finite(targetScreen)&&targetScreen.depth<releaseScreen.depth;
+const zoneCx=zone.reduce((a,p)=>a+p.x,0)/zone.length;
+const rhFraming=releaseScreen.x<zoneCx;
+const screenRightCorrect=cam.right.x<0;
+const trapezoid=Math.abs(zone[0].y-zone[1].y)>2||Math.abs(zone[2].y-zone[3].y)>2;
+const plateFrontVisible=inFrame(plate[0])&&inFrame(plate[1]);
+const plateApexBelow=finite(plate[3])&&plate[3].y>H;
 const tests=[
  ['release endpoint exact',err.release<eps,err.release],
  ['plate target exact',err.target<eps,err.target],
@@ -22,8 +30,14 @@ const tests=[
  ['elapsed-time endpoint exact',timedErr<eps,timedErr],
  ['RH batter / plate / pitcher ordering',geometry,geometry],
  ['batter-eye projection finite',zoneFinite&&finite(releaseScreen)&&finite(targetScreen),zoneFinite],
+ ['RH screen-right basis is not mirrored',screenRightCorrect,cam.right.x],
+ ['release stays in peripheral frame',inFrame(releaseScreen),JSON.stringify(releaseScreen)],
+ ['strike zone fits impact-biased frame',zoneInFrame,JSON.stringify(zone.map(p=>[Math.round(p.x),Math.round(p.y)]))],
+ ['RH view places impact area right of release',rhFraming,zoneCx-releaseScreen.x],
+ ['strike zone projects as perspective quadrilateral',trapezoid,trapezoid],
+ ['home-plate front edge visible while rear apex can fall below frame',plateFrontVisible&&plateApexBelow,JSON.stringify(plate.map(p=>[Math.round(p.x),Math.round(p.y)]))],
  ['near plate has less camera depth than release',perspective,perspective]
 ];
-document.getElementById('out').innerHTML='<div class="meta">CURVE visual flight: <code>'+duration+' ms</code> · eye: <code>('+BATTER_EYE.x+', '+BATTER_EYE.y+', '+BATTER_EYE.z+')</code></div>'+tests.map(([n,ok,v])=>`<div class="${ok?'ok':'bad'}">${ok?'PASS':'FAIL'} — ${n}: <code>${v}</code></div>`).join('');
+document.getElementById('out').innerHTML='<div class="meta">CURVE visual flight: <code>'+duration+' ms</code> · eye: <code>('+BATTER_EYE.x+', '+BATTER_EYE.y+', '+BATTER_EYE.z+')</code> · gameplay gaze: <code>('+IMPACT_LOOK.x+', '+IMPACT_LOOK.y+', '+IMPACT_LOOK.z+')</code> · FOV: <code>'+BATTER_FOV_DEG+'°</code></div>'+tests.map(([n,ok,v])=>`<div class="${ok?'ok':'bad'}">${ok?'PASS':'FAIL'} — ${n}: <code>${v}</code></div>`).join('');
 const c=document.getElementById('c'),ctx=c.getContext('2d');function draw(){const r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;ctx.setTransform(r,0,0,r,0,0);ctx.clearRect(0,0,w,h);const series=[['#ff8181',p=>p.x,-.5,.5],['#9edcff',p=>p.y,.3,2],['#aab4bf',p=>p.z,0,17]];for(const [col,get,min,max] of series){ctx.strokeStyle=col;ctx.beginPath();for(let i=0;i<=120;i++){const u=i/120,p=pitchPoint(pitch,u),x=12+u*(w-24),y=h-12-(get(p)-min)/(max-min)*(h-24);i?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.stroke()}}draw();addEventListener('resize',draw);
 </script>
