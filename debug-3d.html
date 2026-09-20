@@ -20,7 +20,7 @@ h1{font-size:14px;margin:0;letter-spacing:.08em}
 #three{width:100%;height:100%;display:block;touch-action:none}
 .legend{position:absolute;left:8px;bottom:8px;background:#071017d9;border:1px solid #31404e;padding:7px 8px;font-size:8px;line-height:1.7;color:#b8c4cf;pointer-events:none}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
-.cyan{background:#58dcff}.orange{background:#ffac5f}.white{background:#fff}.red{background:#ff6b6b}
+.cyan{background:#58dcff}.orange{background:#ffac5f}.white{background:#fff}.red{background:#ff6b6b}.green{background:#8de7b1}
 .note{position:absolute;top:8px;right:8px;max-width:48%;text-align:right;font-size:8px;line-height:1.55;color:#a8b5c1;background:#071017b8;padding:6px}
 .controls{padding:12px 10px calc(24px + env(safe-area-inset-bottom));display:grid;gap:12px;max-width:760px;margin:auto}
 .section{border:1px solid var(--line);background:var(--panel);padding:10px}
@@ -54,11 +54,12 @@ input[type=range]{width:100%;accent-color:#88e7ff}
 
 <div class="stage" id="stage">
   <canvas id="three"></canvas>
-  <div class="note" id="viewNote">右打者の「目」の位置から、リリースポイント方向を見ています。ホームベースの17インチ辺が投手側、尖った点が捕手側です。</div>
+  <div class="note" id="viewNote">右打者の目から、緑のゲーム用視線点を見ています。ホームベースの17インチ辺が投手側、尖った点が捕手側です。</div>
   <div class="legend">
     <div><span class="dot cyan"></span>Eye / camera</div>
     <div><span class="dot orange"></span>Release point</div>
     <div><span class="dot red"></span>Pitch trajectory</div>
+    <div><span class="dot green"></span>Gameplay gaze target</div>
     <div><span class="dot white"></span>Home plate / strike zone</div>
   </div>
 </div>
@@ -70,7 +71,10 @@ input[type=range]{width:100%;accent-color:#88e7ff}
       <div class="ctrl"><label>Eye X<br>左右位置</label><input id="eyeX" type="range" min="0.35" max="1.20" step="0.01" value="0.76"><output></output></div>
       <div class="ctrl"><label>Eye Y<br>目の高さ</label><input id="eyeY" type="range" min="1.40" max="1.90" step="0.01" value="1.68"><output></output></div>
       <div class="ctrl"><label>Eye Z<br>前後位置</label><input id="eyeZ" type="range" min="-1.30" max="0.20" step="0.01" value="-0.62"><output></output></div>
-      <div class="ctrl"><label>Vertical FOV<br>視野角</label><input id="fov" type="range" min="40" max="80" step="1" value="58"><output></output></div>
+      <div class="ctrl"><label>Vertical FOV<br>視野角</label><input id="fov" type="range" min="40" max="80" step="1" value="70"><output></output></div>
+      <div class="ctrl"><label>Look X<br>視線 左右</label><input id="lookX" type="range" min="-0.50" max="0.50" step="0.01" value="0.00"><output></output></div>
+      <div class="ctrl"><label>Look Y<br>視線 高さ</label><input id="lookY" type="range" min="0.50" max="1.60" step="0.01" value="0.95"><output></output></div>
+      <div class="ctrl"><label>Look Z<br>視線 奥行</label><input id="lookZ" type="range" min="0.43" max="8.00" step="0.01" value="1.50"><output></output></div>
     </div>
   </section>
 
@@ -207,6 +211,8 @@ const releaseMarker=new THREE.Mesh(new THREE.SphereGeometry(.065,18,12),new THRE
 scene.add(releaseMarker);
 const targetMarker=new THREE.Mesh(new THREE.SphereGeometry(.045,18,12),new THREE.MeshStandardMaterial({color:0xff6b6b,emissive:0x551111}));
 scene.add(targetMarker);
+const gazeMarker=new THREE.Mesh(new THREE.SphereGeometry(.05,18,12),new THREE.MeshStandardMaterial({color:0x8de7b1,emissive:0x164d31}));
+scene.add(gazeMarker);
 
 function textSprite(text,color='#ffffff'){
   const cv=document.createElement('canvas'),ctx=cv.getContext('2d');
@@ -250,7 +256,7 @@ controls.target.set(0,1,8);controls.enableDamping=true;controls.enabled=false;
 const camViz=new THREE.PerspectiveCamera(58,1,.03,80);
 const helper=new THREE.CameraHelper(camViz);scene.add(helper);
 
-const ids=['eyeX','eyeY','eyeZ','fov','releaseX','releaseY','releaseZ','rubberZ','targetX','targetY','curveX','curveY'];
+const ids=['eyeX','eyeY','eyeZ','fov','lookX','lookY','lookZ','releaseX','releaseY','releaseZ','rubberZ','targetX','targetY','curveX','curveY'];
 const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
 const defaults=Object.fromEntries(ids.map(id=>[id,Number(el[id].value)]));
 let activeView='batter',playing=true,startTime=performance.now();
@@ -259,6 +265,7 @@ function val(id){return Number(el[id].value)}
 function fmt(v){return Number(v).toFixed(2)}
 function eye(){return new THREE.Vector3(val('eyeX'),val('eyeY'),val('eyeZ'))}
 function release(){return new THREE.Vector3(val('releaseX'),val('releaseY'),val('releaseZ'))}
+function look(){return new THREE.Vector3(val('lookX'),val('lookY'),val('lookZ'))}
 function target(){return new THREE.Vector3(val('targetX'),val('targetY'),PLATE_FRONT)}
 
 function pathPoint(t){
@@ -275,10 +282,11 @@ function rebuild(){
     out.value=(id==='fov'?Math.round(val(id))+'°':fmt(val(id)));
   });
 
-  const E=eye(),R=release(),T=target();
+  const E=eye(),R=release(),T=target(),L=look();
   eyeMarker.position.copy(E);
   releaseMarker.position.copy(R);
   targetMarker.position.copy(T);
+  gazeMarker.position.copy(L);
   // Slider value is the official front edge of the pitcher's rubber, measured from the rear apex.
   rubber.position.set(0,.018,val('rubberZ')+RUBBER_DEPTH/2);
   pitcher.position.set(0,0,val('rubberZ')-.35);
@@ -288,15 +296,15 @@ function rebuild(){
   trajectoryLine.geometry=new THREE.BufferGeometry().setFromPoints(pts);
 
   gazeLine.geometry.dispose();
-  gazeLine.geometry=new THREE.BufferGeometry().setFromPoints([E,R]);
+  gazeLine.geometry=new THREE.BufferGeometry().setFromPoints([E,L]);
   gazeLine.computeLineDistances();
 
   batterCam.position.copy(E);
   batterCam.fov=val('fov');
-  batterCam.lookAt(R);
+  batterCam.lookAt(L);
   batterCam.updateProjectionMatrix();
 
-  camViz.position.copy(E);camViz.fov=val('fov');camViz.aspect=batterCam.aspect;camViz.lookAt(R);camViz.updateProjectionMatrix();camViz.updateMatrixWorld();helper.update();
+  camViz.position.copy(E);camViz.fov=val('fov');camViz.aspect=batterCam.aspect;camViz.lookAt(L);camViz.updateProjectionMatrix();camViz.updateMatrixWorld();helper.update();
 
   const lateral=Math.abs(E.x);
   const eyeToRelease=E.distanceTo(R);
@@ -304,6 +312,7 @@ function rebuild(){
   document.getElementById('readout').innerHTML=
     '<strong>Eye</strong> ('+fmt(E.x)+', '+fmt(E.y)+', '+fmt(E.z)+')<br>'+
     '<strong>Release</strong> ('+fmt(R.x)+', '+fmt(R.y)+', '+fmt(R.z)+')<br>'+
+    '<strong>Gameplay gaze</strong> ('+fmt(L.x)+', '+fmt(L.y)+', '+fmt(L.z)+')<br>'+
     '<strong>Plate target</strong> ('+fmt(T.x)+', '+fmt(T.y)+', '+fmt(T.z)+')<br>'+
     '<strong>Eye lateral offset</strong> '+fmt(lateral)+' m &nbsp; / &nbsp; <strong>Eye→release</strong> '+fmt(eyeToRelease)+' m<br>'+
     '<strong>Approx. horizontal viewing angle to release</strong> '+plateAngle.toFixed(1)+'°';
@@ -316,7 +325,7 @@ function setView(view){
   controls.enabled=view==='orbit';
   helper.visible=view!=='batter';
   const notes={
-    batter:'右打者の「目」の位置から、リリースポイント方向を見ています。',
+    batter:'右打者の目から、ゲーム用の視線点（緑）を見ています。リリースは周辺視野、インパクト帯は主視野に置く設定です。',
     orbit:'自由3D。PITCHER / CATCHER / RH BATTER / 1B / 3B のラベルで位置関係を確認できます。',
     top:'真上から。ホームベースの尖った点は捕手側、17インチの直線辺は投手側です。',
     side:'一塁側からの側面。目の高さ・リリース高・上下軌道を確認します。'
