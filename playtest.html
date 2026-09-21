@@ -14,7 +14,7 @@ body{display:flex;justify-content:center}
 header{display:grid;grid-template-columns:78px 1fr 92px;align-items:center;padding:max(6px,env(safe-area-inset-top)) 10px 4px;border-bottom:1px solid var(--line);background:#081017e8;z-index:4}
 .hlabel{font-size:8px;color:#7f919f;letter-spacing:.12em}.hvalue{font-size:17px;font-weight:900;margin-top:2px}.center{text-align:center}.title{font-size:11px;font-weight:900;letter-spacing:.12em}.pitchname{font-size:8px;color:#aebbc5;margin-top:3px}.right{text-align:right}
 .stage{position:relative;min-height:0;overflow:hidden;background:#071017}
-canvas{width:100%;height:100%;display:block;touch-action:none}
+canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 .result{position:absolute;top:15%;left:50%;transform:translateX(-50%);font-size:34px;font-weight:1000;text-align:center;text-shadow:0 3px #000;pointer-events:none;opacity:0;z-index:3}
 .result.on{opacity:1}.result small{display:block;font-size:9px;margin-top:4px;letter-spacing:.12em}
 .cursor{position:absolute;width:30px;height:30px;border:2px solid var(--contact);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:3}
@@ -61,7 +61,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
 
 <section class="stage" id="stage">
   <canvas id="three"></canvas>
-  <div class="hint">押して狙う → 長押しでCONTACT↑ / POWER↓ → 離してスイング</div>
+  <div class="hint">タッチ / 左クリックで狙う → 長押しでCONTACT↑ / POWER↓ → 離してスイング</div>
   <button id="calBtn" class="calBtn">CALIBRATE →</button>
   <div id="cursor" class="cursor"></div>
   <div id="result" class="result"></div>
@@ -98,15 +98,15 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
 
     <h2>BATTER CAMERA CALIBRATION</h2>
     <div class="grid">
-      <div class="ctrl"><label>Camera X <small>打者の目の左右位置。+で三塁側へ移動。</small></label><input id="eyeX" type="range" min="0.35" max="1.20" step="0.01" value="0.76"><output></output></div>
-      <div class="ctrl"><label>Camera Y <small>打者の目の高さ。+で高くなる。</small></label><input id="eyeY" type="range" min="1.40" max="1.90" step="0.01" value="1.68"><output></output></div>
-      <div class="ctrl"><label>Camera Z <small>打者の目の前後位置。+で投手側へ移動。</small></label><input id="eyeZ" type="range" min="-1.30" max="0.20" step="0.01" value="-0.62"><output></output></div>
-      <div class="ctrl"><label>Look X <small>カメラが見る点の左右。カメラ位置は動かさない。</small></label><input id="lookX" type="range" min="-0.50" max="0.50" step="0.01" value="0.00"><output></output></div>
-      <div class="ctrl"><label>Look Y <small>見る点の高さ。下げるほどインパクト帯を見る。</small></label><input id="lookY" type="range" min="0.50" max="1.60" step="0.01" value="0.95"><output></output></div>
-      <div class="ctrl"><label>Look Z <small>見る点の奥行。小さいほどホーム付近、大きいほど投手側。</small></label><input id="lookZ" type="range" min="0.43" max="8.00" step="0.01" value="1.50"><output></output></div>
-      <div class="ctrl"><label>FOV <small>縦方向の視野角。+で広角になり全体が小さく見える。</small></label><input id="fov" type="range" min="40" max="80" step="1" value="70"><output></output></div>
+      <div class="ctrl"><label>Camera X <small>打者の目を左右へ平行移動。+で三塁側。向きは維持。</small></label><input id="eyeX" type="range" min="0.20" max="1.18" step="0.01" value="0.69"><output></output></div>
+      <div class="ctrl"><label>Camera Y <small>打者の目を上下へ平行移動。+で高く。向きは維持。</small></label><input id="eyeY" type="range" min="1.00" max="1.90" step="0.01" value="1.45"><output></output></div>
+      <div class="ctrl"><label>Camera Z <small>打者の目を前後へ平行移動。+で投手側。向きは維持。</small></label><input id="eyeZ" type="range" min="-0.80" max="0.80" step="0.01" value="0.00"><output></output></div>
+      <div class="ctrl"><label>Look X <small>カメラの向きだけを左右へ調整。</small></label><input id="lookX" type="range" min="-0.60" max="1.60" step="0.01" value="0.43"><output></output></div>
+      <div class="ctrl"><label>Look Y <small>カメラの向きだけを上下へ調整。</small></label><input id="lookY" type="range" min="0.30" max="2.20" step="0.01" value="1.24"><output></output></div>
+      <div class="ctrl"><label>Look Z <small>見る方向の奥行を調整。小さいほどホーム寄り。</small></label><input id="lookZ" type="range" min="-0.80" max="3.00" step="0.01" value="0.43"><output></output></div>
+      <div class="ctrl"><label>FOV <small>縦方向の視野角。+で広角。80°を新しい基準値に設定。</small></label><input id="fov" type="range" min="55" max="105" step="1" value="80"><output></output></div>
     </div>
-    <div class="devNote">Camera X / Y / Z が「打者の目＝カメラ本体」の位置です。Look X / Y / Z は、その位置からどこを向くかだけを変えます。</div>
+    <div class="devNote">Camera X / Y / Z はカメラ本体を平行移動し、Look点も同じ量だけ移動するので向きは変わりません。向きだけ変えたい場合は Look X / Y / Z を調整します。</div>
     <div class="calActions"><button id="resetCam">RESET CAMERA</button><button id="closeCal">CLOSE</button></div>
   </aside>
 
@@ -196,8 +196,8 @@ scene.add(ball);
 const trail=[];
 for(let i=0;i<6;i++){const m=new THREE.Mesh(new THREE.SphereGeometry(.028,12,8),new THREE.MeshBasicMaterial({color:0xbfe5ff,transparent:true,opacity:.11+i*.02}));scene.add(m);trail.push(m)}
 
-const camera=new THREE.PerspectiveCamera(70,1,.03,80);
-const cfg={eyeX:.76,eyeY:1.68,eyeZ:-.62,lookX:0,lookY:.95,lookZ:1.50,fov:70};
+const camera=new THREE.PerspectiveCamera(80,1,.03,80);
+const cfg={eyeX:.69,eyeY:1.45,eyeZ:0.00,lookX:.43,lookY:1.24,lookZ:.43,fov:80};
 const cfgDefaults={...cfg};
 const controlsIds=['eyeX','eyeY','eyeZ','lookX','lookY','lookZ','fov'];
 const ctl=Object.fromEntries(controlsIds.map(id=>[id,document.getElementById(id)]));
@@ -215,14 +215,28 @@ function syncDevUI(){autoBtn.textContent=dev.auto?'AUTO: ON / 3s':'AUTO: OFF';pi
 syncDevUI();
 
 function applyCamera(){
-  for(const id of controlsIds){cfg[id]=Number(ctl[id].value);ctl[id].nextElementSibling.value=id==='fov'?Math.round(cfg[id])+'°':cfg[id].toFixed(2)}
+  for(const id of controlsIds){
+    cfg[id]=Number(ctl[id].value);
+    ctl[id].nextElementSibling.value=id==='fov'?Math.round(cfg[id])+'°':cfg[id].toFixed(2);
+  }
   camera.position.set(cfg.eyeX,cfg.eyeY,cfg.eyeZ);
   camera.fov=cfg.fov;
   camera.lookAt(cfg.lookX,cfg.lookY,cfg.lookZ);
   camera.updateProjectionMatrix();
   try{localStorage.setItem(STORAGE,JSON.stringify(cfg))}catch(e){}
 }
-controlsIds.forEach(id=>ctl[id].addEventListener('input',applyCamera));
+const eyeToLook={eyeX:'lookX',eyeY:'lookY',eyeZ:'lookZ'};
+for(const id of controlsIds){
+  ctl[id].addEventListener('input',()=>{
+    if(eyeToLook[id]){
+      const nextEye=Number(ctl[id].value);
+      const delta=nextEye-cfg[id];
+      const lookId=eyeToLook[id];
+      ctl[lookId].value=(Number(ctl[lookId].value)+delta).toFixed(2);
+    }
+    applyCamera();
+  });
+}
 applyCamera();
 
 const ui={
@@ -297,7 +311,9 @@ function swing(now){
 }
 
 canvas.addEventListener('pointerdown',e=>{
-  if(S.phase!=='pitching'||S.input||S.locked||ui.cal.classList.contains('open'))return;
+  const overlayCalOpen=ui.cal.classList.contains('open')&&window.innerWidth<1200;
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  if(S.phase!=='pitching'||S.input||S.locked||overlayCalOpen)return;
   e.preventDefault();const r=stage.getBoundingClientRect();
   S.input={id:e.pointerId,down:performance.now(),x:e.clientX-r.left,y:e.clientY-r.top};
   canvas.setPointerCapture?.(e.pointerId)
@@ -308,6 +324,7 @@ canvas.addEventListener('pointermove',e=>{
 },{passive:false});
 canvas.addEventListener('pointerup',e=>{if(!S.input||e.pointerId!==S.input.id)return;e.preventDefault();swing(performance.now());S.input=null},{passive:false});
 canvas.addEventListener('pointercancel',e=>{if(!S.input||e.pointerId!==S.input.id)return;S.input=null;hideCursor()},{passive:false});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
 
 document.getElementById('calBtn').onclick=()=>ui.cal.classList.toggle('open');
 document.getElementById('closeCal').onclick=()=>ui.cal.classList.remove('open');
