@@ -272,9 +272,15 @@ const battedBall=new THREE.Mesh(
 battedBall.visible=false;
 scene.add(battedBall);
 
+const incomingImpactTrail=new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
+  new THREE.LineBasicMaterial({color:0xbfe5ff,transparent:true,opacity:.78})
+);
+incomingImpactTrail.visible=false;scene.add(incomingImpactTrail);
+
 const battedTrail=new THREE.Line(
   new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
-  new THREE.LineBasicMaterial({color:0xffd071,transparent:true,opacity:.72})
+  new THREE.LineBasicMaterial({color:0xffd071,transparent:true,opacity:.78})
 );
 battedTrail.visible=false;scene.add(battedTrail);
 
@@ -360,7 +366,7 @@ function makePitch(){
 }
 function nextPitch(now=performance.now()){
   S.n++;S.pitch=makePitch();S.t0=now;S.nextDue=now+INTERVAL_MS;S.locked=false;S.swing=null;S.visualSwing=null;S.batted=null;S.markerShown=false;S.phase='pitching';
-  ball.visible=true;battedBall.visible=false;battedTrail.visible=false;plateCrossMarker.visible=false;contactMarker.visible=false;for(const t of trail)t.visible=true;
+  ball.visible=true;battedBall.visible=false;incomingImpactTrail.visible=false;battedTrail.visible=false;plateCrossMarker.visible=false;contactMarker.visible=false;for(const t of trail)t.visible=true;
   ui.pitchNo.textContent=S.n;
   ui.pitchInfo.textContent=S.pitch.type+' · '+S.pitch.course+' · '+FLIGHT_MS[S.pitch.type]+'ms';
   ui.result.classList.remove('on');ui.result.textContent='';
@@ -590,11 +596,21 @@ function setBattedTrail(points){
   battedTrail.geometry.dispose();
   battedTrail.geometry=new THREE.BufferGeometry().setFromPoints(points);
 }
+function setIncomingImpactTrail(ms){
+  const pts=[];
+  const start=Math.max(S.t0,ms-170);
+  for(let t=start;t<ms;t+=12)pts.push(ballAtMs(t));
+  pts.push(ballAtMs(ms));
+  incomingImpactTrail.geometry.dispose();
+  incomingImpactTrail.geometry=new THREE.BufferGeometry().setFromPoints(pts);
+  incomingImpactTrail.visible=true;
+}
 function beginPhysicalBattedBall(ms,ballPos,near,physics){
   const surfaceContact=near.point.clone().lerp(ballPos,.5);
   contactMarker.position.copy(surfaceContact);contactMarker.visible=true;
   S.contactMarkerUntil=Infinity;
 
+  setIncomingImpactTrail(ms);
   S.batted={
     t0:ms,start:ballPos.clone(),velocity:physics.out.clone(),power:physics.power,
     sprayDeg:THREE.MathUtils.radToDeg(Math.atan2(physics.out.x,physics.out.z)),
