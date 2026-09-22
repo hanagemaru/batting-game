@@ -61,7 +61,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 
 <section class="stage" id="stage">
   <canvas id="three"></canvas>
-  <div class="hint">スワイプ / ドラッグでバット位置を合わせる → 離すとスイング開始 → 約100ms後にインパクト</div>
+  <div class="hint">スワイプ / ドラッグでバット位置を合わせる → 離してスイング · delayはCALIBRATEで0〜180ms</div>
   <button id="calBtn" class="calBtn">CALIBRATE →</button>
   <div id="cursor" class="cursor" style="display:none"></div>
   <div id="result" class="result"></div>
@@ -96,9 +96,23 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
         </select>
       </label>
     </div>
+    <div class="devGrid" style="margin-top:8px">
+      <label class="devField">カーソル表示面
+        <select id="cursorPlane">
+          <option value="STRIKE">STRIKE PLANE</option>
+          <option value="IMPACT">IMPACT SURFACE</option>
+        </select>
+      </label>
+      <label class="devField">Swing delay
+        <div class="ctrl" style="grid-template-columns:1fr 48px">
+          <input id="swingDelay" type="range" min="0" max="180" step="10" value="0"><output>0ms</output>
+        </div>
+      </label>
+    </div>
     <div class="calActions"><button id="throwNow">THROW NOW</button><button id="autoBtn">AUTO: ON / 3s</button></div>
     <div id="devStatus" class="devStatus">AUTO投球: 3.0秒間隔</div>
-    <div class="devNote">INSIDE = 右打者に近い三塁側（+X）、OUTSIDE = 一塁側（−X）。BALL系はストライクゾーン外の到達可能範囲を検証します。</div>
+    <div id="impactStatus" class="devStatus">CONTACT: —</div>
+    <div class="devNote">INSIDE = 右打者に近い三塁側（+X）、OUTSIDE = 一塁側（−X）。BALL系はゾーン外を検証します。<br>STRIKE PLANEはカーソルをホームベース前端のストライクゾーン面に表示し、IMPACT SURFACEはコースごとの標準インパクト面に表示します。物理判定はどちらも同じ3Dスイングモデルを使います。</div>
 
     <h2>BATTER CAMERA CALIBRATION</h2>
     <div class="grid">
@@ -118,7 +132,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
     <div class="card">
       <div class="eyebrow">IMPACT MODEL PLAYTEST</div>
       <h1>コースごとの<br>「打つ位置」で打つ。</h1>
-      <p>新しい打撃モデルの比較試作です。カーソルは標準インパクト面上の「バット先端」。指を離すとスイング開始し、約100ms後にインパクトします。投球前に離した場合はスイングしません。</p>
+      <p>3D衝突モデルの試作です。カーソル表示面とSwing delayを切替できます。実際のバットは手元から3D軌道で振り、ボールとの最近接衝突点から打球を発生させます。投球前に離した場合はスイングしません。</p>
       <button id="startBtn">START</button>
     </div>
   </div>
