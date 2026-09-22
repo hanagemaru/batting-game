@@ -928,7 +928,9 @@ canvas.addEventListener('pointermove',e=>{
   const hit=screenToAim(e.clientX,e.clientY);
   if(!hit)return;
   if(S.input&&e.pointerId===S.input.id){e.preventDefault();S.aimWorld.copy(hit);return}
-  if(e.pointerType==='mouse'&&ui.start.style.display==='none'&&!['posthit','swinging','missed','ending','ended'].includes(S.phase))S.aimWorld.copy(hit);
+  // Match touch semantics in player modes: mouse hover may pre-position before a pitch,
+  // but an active pitch requires holding/dragging to adjust.
+  if(e.pointerType==='mouse'&&ui.start.style.display==='none'&&['ready','waiting'].includes(S.phase))S.aimWorld.copy(hit);
 },{passive:false});
 canvas.addEventListener('pointerup',e=>{
   if(!S.input||e.pointerId!==S.input.id)return;
