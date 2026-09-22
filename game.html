@@ -205,7 +205,7 @@ function renderModeUI(){
 }
 function updateSessionHud(){
   const el=document.getElementById('modeStatus'),target=document.getElementById('targetStatus');
-  if(rule.key==='survival')el.textContent='OUT '+session.outs+'/3 · COMBO '+session.combo;
+  if(rule.key==='survival')el.textContent='OUT '+session.outs+'/3 · COMBO '+session.combo+' · LV '+Math.min(4,1+Math.floor(Math.max(0,S.n-1)/10));
   else if(rule.key==='target')el.textContent='TARGET '+session.targetHits+'/'+rule.limit+' · '+session.score+' PTS';
   else el.textContent='HIT '+session.hits+' · '+session.score+' PTS';
   if(rule.key==='target'&&session.currentTarget){
@@ -543,7 +543,13 @@ function updateCameraView(now){
 
 function selectedType(){
   if(dev.pitchMode!=='RANDOM')return dev.pitchMode;
-  const names=['FAST','FAST','FAST','CURVE','CURVE','FORK'];
+  let names=['FAST','FAST','FAST','CURVE','CURVE','FORK'];
+  if(rule.key==='survival'){
+    const lv=Math.min(4,1+Math.floor(Math.max(0,S.n)/10));
+    if(lv===2)names=['FAST','FAST','FAST','CURVE','CURVE','CURVE','FORK','FORK'];
+    else if(lv===3)names=['FAST','FAST','CURVE','CURVE','CURVE','FORK','FORK','FORK'];
+    else if(lv>=4)names=['FAST','FAST','CURVE','CURVE','FORK','FORK','FORK','FORK'];
+  }
   return names[Math.floor(Math.random()*names.length)];
 }
 function selectedTarget(){
