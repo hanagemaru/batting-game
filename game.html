@@ -897,9 +897,11 @@ function finishSwingMiss(){
   const sw=S.swing;
   const timing=Math.round(sw.closestTiming??(performance.now()-idealImpactTimeMs()));
   const dist=Number.isFinite(sw.closestDist)?Math.round(sw.closestDist*1000):999;
+  const reason=Math.abs(timing)>=65?(timing<0?'EARLY':'LATE'):'AIM';
   const failLabel=registerFailure('MISS');
-  ui.result.innerHTML='MISS<small>closest '+dist+'mm · timing Δ '+timing+'ms'+failLabel+'</small>';
+  ui.result.innerHTML='MISS<small>'+reason+failLabel+'</small>';
   ui.result.classList.add('on');setTimeout(()=>ui.result.classList.remove('on'),900);
+  // Keep precise diagnostics only in the hidden developer status.
   impactStatus.textContent='NO CONTACT · closest '+dist+'mm · timing Δ '+timing+'ms';
   S.swing=null;S.phase='missed';S.locked=true;
 }
