@@ -8,15 +8,23 @@ Current player-facing prototypes:
 - `game.html?mode=survival` — 3-Out Survival.
 - `playtest-impact.html` — developer tuning / calibration. Keep this separate from player modes.
 
+## Shared gameplay contract
+
+The player modes intentionally reuse the current 3D swing/contact model from the impact prototype. Player-facing rules should not silently change bat geometry, collision timing, camera calibration, or pitch physics; tune those in `playtest-impact.html` first, then port deliberate changes.
+
+Auto-pitch cadence is readiness-based: after a hit, the camera may track the batted ball and return to the batting view; only once control is available again does the 3-second next-pitch countdown begin. Miss/take paths also enter the same ready/wait state before the next countdown.
+
+The player build does not reveal pitch type, course, or flight time before/during a pitch. The center header is reserved for neutral state feedback such as pitch number, hit tracking, and the next-pitch countdown.
+
 ## 1. 10-pitch Score Attack
 
 **Purpose:** shortest, clearest replay loop.
 
 - 10 pitches.
-- A hit scores primarily from contact power/quality.
+- A hit scores primarily from contact power/quality (base score up to roughly 100 per hit under the current model).
 - Miss/take = 0.
 - Local best score is stored.
-- Expected run length is roughly tens of seconds.
+- Current expected run length is roughly 40–50 seconds because the 3-second interval starts after each play becomes controllable again.
 
 **Future monetization fit:** result-screen interstitial, frequency capped rather than every run. No ads between pitches.
 
@@ -27,8 +35,9 @@ Current player-facing prototypes:
 - 12 pitches.
 - Target cycles through PULL → CENTER → OPPOSITE.
 - A normal hit earns its contact score.
-- Correct direction adds +100.
-- A field ring visualizes the requested direction.
+- Correct direction adds +100; an incorrect direction still keeps the normal contact score.
+- A field ring and HUD label visualize the requested direction.
+- Hit feedback explicitly reports TARGET +100 or TARGET MISS.
 - Local best score is stored.
 
 Current direction bands:
@@ -36,7 +45,7 @@ Current direction bands:
 - CENTER: -10° < spray < +10°
 - OPPOSITE: spray <= -10°
 
-These thresholds are tuning values, not final baseball claims.
+These thresholds are tuning values, not final baseball claims. The +100 bonus is intentionally large enough to make direction control the defining skill; revisit only after playtesting confirms how reliably each band can be reached.
 
 **Future monetization fit:** result-screen interstitial. Avoid rewarded score multipliers because they would undermine score comparison.
 
@@ -49,7 +58,10 @@ These thresholds are tuning values, not final baseball claims.
 - 3 outs ends the run.
 - Consecutive hits increase combo multiplier:
   - x1.00, x1.15, x1.30 ... capped at x2.50.
+- A miss/take resets combo to zero.
 - Local best score is stored.
+
+The x2.50 cap prevents a very long streak from making late hits disproportionately dominant while still rewarding consistency.
 
 **Future monetization fit:** optional rewarded continue can work well, but a continued run should be marked assisted / separated from ranked scores. Standard interstitial can remain result-only.
 
@@ -68,4 +80,4 @@ Avoid:
 - banners covering the 3D batting viewport,
 - paid/rewarded bonuses that mix into the same competitive leaderboard.
 
-`game.html` currently dispatches a `batting:session-end` browser event as a clean future integration point. No ad provider is wired into the prototype.
+`game.html` dispatches a `batting:session-end` browser event as a clean future integration point. No ad provider is wired into the prototype.
