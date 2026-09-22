@@ -20,7 +20,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 .cursor{position:absolute;width:30px;height:30px;border:2px solid var(--contact);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:3}
 .cursor:before,.cursor:after{content:"";position:absolute;left:50%;top:50%;background:#fff;transform:translate(-50%,-50%)}
 .cursor:before{width:12px;height:1px}.cursor:after{width:1px;height:12px}
-.hint{position:absolute;left:50%;top:8px;transform:translateX(-50%);font-size:8px;color:#a7b4be;background:#061018b8;border:1px solid #2b3946;padding:5px 7px;white-space:nowrap;pointer-events:none;z-index:2}
+.hint{position:absolute;left:50%;top:42px;transform:translateX(-50%);max-width:calc(100% - 20px);font-size:8px;line-height:1.35;text-align:center;color:#a7b4be;background:#061018b8;border:1px solid #2b3946;padding:5px 7px;white-space:normal;pointer-events:none;z-index:2}
 .calBtn{display:none!important}.cal{display:none!important}
 .modeHud{position:absolute;left:8px;top:8px;z-index:4;display:flex;gap:6px;align-items:center;pointer-events:none}
 .modePill{background:#061018cc;border:1px solid #334653;padding:6px 8px;font-size:8px;font-weight:900;letter-spacing:.08em}
@@ -257,6 +257,7 @@ function registerHit(physics,batted){
   let gained=base,label='';
   if(rule.key==='target'){
     const ok=sprayMatchesTarget(batted.sprayDeg,session.currentTarget);
+    targetFieldMarker.material.color.setHex(ok?0x8de7b1:0xf07178);
     if(ok){gained+=100;session.targetHits++;label=' · TARGET +100'}
     else label=' · TARGET MISS';
   }else if(rule.key==='survival'){
@@ -271,8 +272,14 @@ function registerHit(physics,batted){
 }
 function registerFailure(kind){
   session.misses++;session.combo=0;
-  if(rule.key==='survival')session.outs++;
+  let label='';
+  if(rule.key==='survival'){
+    session.outs++;
+    label=' · OUT '+session.outs+'/3';
+  }
+  if(rule.key==='target')targetFieldMarker.material.color.setHex(0xf07178);
   updateSessionHud();
+  return label;
 }
 function resetSession(){
   session={score:0,hits:0,misses:0,outs:0,combo:0,bestCombo:0,targetHits:0,ended:false,currentTarget:null};
@@ -317,7 +324,7 @@ dirt.rotation.x=-Math.PI/2;dirt.position.set(0,.006,0);dirt.scale.set(1,1.3,1);s
 
 const targetFieldMarker=new THREE.Mesh(
   new THREE.RingGeometry(1.15,1.75,48),
-  new THREE.MeshBasicMaterial({color:0xf4d15d,transparent:true,opacity:.42,side:THREE.DoubleSide,depthWrite:false})
+  new THREE.MeshBasicMaterial({color:0xf4d15d,transparent:true,opacity:.58,side:THREE.DoubleSide,depthWrite:false})
 );
 targetFieldMarker.rotation.x=-Math.PI/2;
 targetFieldMarker.position.y=.04;
@@ -553,7 +560,10 @@ function makePitch(){
 function nextPitch(now=performance.now()){
   if(sessionShouldEnd()){endSession();return}
   S.n++;S.pitch=makePitch();S.t0=now;S.nextDue=Infinity;S.locked=false;
-  if(rule.key==='target')session.currentTarget=targetForPitch(S.n);
+  if(rule.key==='target'){
+    session.currentTarget=targetForPitch(S.n);
+    targetFieldMarker.material.color.setHex(0xf4d15d);
+  }
   updateSessionHud();S.swing=null;S.visualSwing=null;S.batted=null;S.markerShown=false;S.phase='pitching';
   ball.visible=true;battedBall.visible=false;incomingImpactTrail.visible=false;battedTrail.visible=false;plateCrossMarker.visible=false;contactMarker.visible=false;for(const t of trail)t.visible=true;
   ui.pitchNo.textContent=S.n;
@@ -871,10 +881,10 @@ function finishSwingMiss(){
   const sw=S.swing;
   const timing=Math.round(sw.closestTiming??(performance.now()-idealImpactTimeMs()));
   const dist=Number.isFinite(sw.closestDist)?Math.round(sw.closestDist*1000):999;
-  ui.result.innerHTML='MISS<small>closest '+dist+'mm · timing Δ '+timing+'ms</small>';
+  const failLabel=registerFailure('MISS');
+  ui.result.innerHTML='MISS<small>closest '+dist+'mm · timing Δ '+timing+'ms'+failLabel+'</small>';
   ui.result.classList.add('on');setTimeout(()=>ui.result.classList.remove('on'),900);
   impactStatus.textContent='NO CONTACT · closest '+dist+'mm · timing Δ '+timing+'ms';
-  registerFailure('MISS');
   S.swing=null;S.phase='missed';S.locked=true;
 }
 function swing(now){
@@ -973,8 +983,8 @@ function animate(now){
       ball.visible=false;for(const t of trail)t.visible=false;showPlateMarker();
 
       if(!hadSwing&&S.phase==='pitching'){
-        registerFailure('TAKE');
-        ui.result.innerHTML='TAKE<small>0 PTS</small>';
+        const failLabel=registerFailure('TAKE');
+        ui.result.innerHTML='TAKE<small>0 PTS'+failLabel+'</small>';
         ui.result.classList.add('on');
         setTimeout(()=>ui.result.classList.remove('on'),650);
       }
