@@ -219,11 +219,18 @@ function updateSessionHud(){
     if(typeof targetFieldMarker!=='undefined')targetFieldMarker.visible=false;
   }
 }
+function readBest(key){
+  try{return Number(localStorage.getItem(key)||0)||0}catch(e){return 0}
+}
+function writeBest(key,value){
+  try{localStorage.setItem(key,String(value));return true}catch(e){return false}
+}
 function saveBest(){
   const key='batting-best-'+rule.key;
-  const old=Number(localStorage.getItem(key)||0);
-  if(session.score>old)localStorage.setItem(key,String(session.score));
-  return Math.max(old,session.score);
+  const old=readBest(key);
+  const isNew=session.score>old;
+  if(isNew)writeBest(key,session.score);
+  return{best:Math.max(old,session.score),isNew};
 }
 function sessionShouldEnd(){
   if(session.ended)return true;
@@ -236,7 +243,8 @@ function endSession(){
   targetFieldMarker.visible=false;
   document.getElementById('targetStatus').style.display='none';
   document.getElementById('pitchInfo').textContent='SESSION COMPLETE';
-  const best=saveBest();
+  const bestResult=saveBest(),best=bestResult.best;
+  document.getElementById('endEyebrow').textContent=bestResult.isNew?'NEW BEST':'SESSION COMPLETE';
   document.getElementById('endTitle').textContent=rule.title;
   document.getElementById('endScore').textContent=session.score+' PTS';
   const detail=rule.key==='survival'
