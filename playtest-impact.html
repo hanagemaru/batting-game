@@ -537,21 +537,27 @@ function animate(now){
     ball.position.copy(pitchPosition(u));
     ball.visible=u<=1.10;
     for(let i=0;i<trail.length;i++){
-      const tu=u-(i+1)*.026;trail[i].position.copy(pitchPosition(Math.max(0,tu)));trail[i].visible=u<1.08
+      const tu=u-(i+1)*.026;
+      trail[i].position.copy(pitchPosition(Math.max(0,tu)));
+      trail[i].visible=u<1.08;
     }
     if(u>=1)showPlateMarker();
 
     if(S.phase==='swinging'&&S.swing&&now>=S.swing.impactAt)resolveSwing(now);
 
     if(u>1.10&&S.phase!=='batted'){
-      const swung=S.phase==='missed'||S.phase==='swinging';
+      const hadSwing=S.phase==='missed'||S.phase==='swinging';
       if(S.phase==='swinging'&&S.swing)resolveSwing(now);
       ball.visible=false;for(const t of trail)t.visible=false;showPlateMarker();
-      if(!swung&&S.phase==='pitching'){
-        ui.result.innerHTML='TAKE<small>PLATE LOCATION MARKED</small>';ui.result.classList.add('on');
+
+      if(!hadSwing&&S.phase==='pitching'){
+        ui.result.innerHTML='TAKE<small>PLATE LOCATION MARKED</small>';
+        ui.result.classList.add('on');
         setTimeout(()=>ui.result.classList.remove('on'),650);
       }
-      if(S.phase!=='batted'){S.phase='waiting';S.locked=false;S.swing=null}
+      if(S.phase!=='batted'){
+        S.phase='waiting';S.locked=false;S.swing=null;
+      }
     }
   }else if(S.phase==='batted'&&S.batted){
     ball.visible=false;for(const t of trail)t.visible=false;
@@ -562,7 +568,7 @@ function animate(now){
       S.batted.start.z+S.batted.vz*t
     );
     if((t>.18&&battedBall.position.y<=.04)||t>2.5){
-      battedBall.visible=false;S.batted=null;S.locked=false;S.phase='waiting'
+      battedBall.visible=false;S.batted=null;S.locked=false;S.phase='waiting';
     }
   }else{
     ball.visible=false;battedBall.visible=false;for(const t of trail)t.visible=false;
@@ -571,74 +577,12 @@ function animate(now){
   updateCursorBarrel();
   updateBat(now);
 
-  // Bottom bars are diagnostic: timing quality and max power cap from pitch location.
   if(S.pitch){
     const loc=locationCap(S.pitch.target);
     ui.power.style.width=Math.round(loc.cap*100)+'%';
+  }else{
+    ui.power.style.width='100%';
   }
-
-  const remain=dev.auto&&ui.start.style.display==='none'?Math.max(0,S.nextDue-now):0;
-  devStatus.textContent=dev.auto
-    ?'AUTO投球: 3.0秒間隔 / 次まで '+(remain/1000).toFixed(1)+'s / '+dev.pitchMode+' / '+dev.courseMode
-    :'AUTO停止中 / THROW NOWで1球 / '+dev.pitchMode+' / '+dev.courseMode;
-
-  renderer.render(scene,camera);
-}
-requestAnimationFrame(animate);
-
-  if(dev.auto&&ui.start.style.display==='none'&&!['pitching','missed','batted'].includes(S.phase)&&now>=S.nextDue)nextPitch(now);
-
-  if(S.phase==='pitching'||S.phase==='missed'){
-    const u=(now-S.t0)/FLIGHT_MS[S.pitch.type];
-    ball.position.copy(pitchPosition(u));
-    ball.visible=u<=1.12;
-    for(let i=0;i<trail.length;i++){
-      const tu=clamp(u-(i+1)*.026,0,1);trail[i].position.copy(pitchPosition(tu));trail[i].visible=u<1.08
-    }
-
-    if(S.phase==='pitching'&&!S.locked){
-      if(S.input){
-        const st=holdState(now-S.input.down);setCursor(S.input.x,S.input.y,st.contactRadius);
-        ui.contact.style.width=Math.round(st.u*100)+'%';ui.power.style.width=Math.round(st.power*100)+'%'
-      }else{
-        const a=aimPoint(),st=holdState(0);setCursor(a.x,a.y,st.contactRadius);
-        ui.contact.style.width='0%';ui.power.style.width='100%'
-      }
-    }else 
-
-    if(u>1.12){
-      const wasMiss=S.phase==='missed';
-      S.locked=false;S.phase='waiting';ball.visible=false;for(const t of trail)t.visible=false;
-      if(!wasMiss){
-        ui.result.innerHTML='TAKE<small>0 PTS</small>';ui.result.classList.add('on');
-        setTimeout(()=>ui.result.classList.remove('on'),520)
-      }
-    }
-  }else if(S.phase==='batted'&&S.batted){
-    ball.visible=false;for(const t of trail)t.visible=false;
-    const t=(now-S.batted.t0)/1000;
-    battedBall.position.set(
-      S.batted.start.x+S.batted.vx*t,
-      S.batted.start.y+S.batted.vy*t-4.9*t*t,
-      S.batted.start.z+S.batted.vz*t
-    );
-    if((t>.18&&battedBall.position.y<=.04)||t>2.4){
-      battedBall.visible=false;S.batted=null;S.locked=false;S.phase='waiting'
-    }
-  }else if(S.phase==='idle'||S.phase==='ready'||S.phase==='waiting'){
-    ball.visible=false;battedBall.visible=false;for(const t of trail)t.visible=false;
-    if(ui.start.style.display==='none'){
-      if(S.input){
-        const st=holdState(now-S.input.down);setCursor(S.input.x,S.input.y,st.contactRadius);
-        ui.contact.style.width=Math.round(st.u*100)+'%';ui.power.style.width=Math.round(st.power*100)+'%'
-      }else{
-        const a=aimPoint(),st=holdState(0);setCursor(a.x,a.y,st.contactRadius);
-        ui.contact.style.width='0%';ui.power.style.width='100%'
-      }
-    }else hideCursor()
-  }
-
-  updateBat(now);
 
   const remain=dev.auto&&ui.start.style.display==='none'?Math.max(0,S.nextDue-now):0;
   devStatus.textContent=dev.auto
