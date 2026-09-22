@@ -349,6 +349,45 @@ const ui={
 
 let S={phase:'idle',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rand=(a,b)=>a+Math.random()*(b-a);
+const cameraProbe=new THREE.PerspectiveCamera();
+
+function lookQuaternion(target){
+  cameraProbe.position.set(cfg.eyeX,cfg.eyeY,cfg.eyeZ);
+  cameraProbe.up.set(0,1,0);
+  cameraProbe.lookAt(target);
+  return cameraProbe.quaternion.clone();
+}
+function armNextPitch(now){
+  S.nextDue=dev.auto?now+INTERVAL_MS:Infinity;
+}
+function enterWaiting(now){
+  S.phase='waiting';S.locked=false;S.swing=null;
+  armNextPitch(now);
+}
+function updateCameraView(now){
+  camera.position.set(cfg.eyeX,cfg.eyeY,cfg.eyeZ);
+  camera.fov=cfg.fov;camera.updateProjectionMatrix();
+  const baseQ=lookQuaternion(new THREE.Vector3(cfg.lookX,cfg.lookY,cfg.lookZ));
+  if(!S.hitView){
+    camera.quaternion.copy(baseQ);
+    return;
+  }
+  const frontQ=lookQuaternion(new THREE.Vector3(0,1.05,18.44));
+  const hv=S.hitView;
+  if(now<hv.turnEnd){
+    const t=clamp((now-hv.start)/Math.max(1,hv.turnEnd-hv.start),0,1);
+    camera.quaternion.copy(baseQ).slerp(frontQ,t*t*(3-2*t));
+  }else if(now<hv.holdUntil){
+    camera.quaternion.copy(frontQ);
+  }else if(now<hv.returnUntil){
+    const t=clamp((now-hv.holdUntil)/Math.max(1,hv.returnUntil-hv.holdUntil),0,1);
+    camera.quaternion.copy(frontQ).slerp(baseQ,t*t*(3-2*t));
+  }else{
+    camera.quaternion.copy(baseQ);
+    S.hitView=null;
+    if(S.phase==='posthit')enterWaiting(now);
+  }
+}
 
 function selectedType(){
   if(dev.pitchMode!=='RANDOM')return dev.pitchMode;
@@ -645,7 +684,13 @@ function beginPhysicalBattedBall(ms,ballPos,near,physics){
   battedBall.position.copy(ballPos);battedBall.visible=true;
   setBattedTrail(S.batted.points);battedTrail.visible=true;
   ball.visible=false;for(const t of trail)t.visible=false;
-  S.phase='batted';S.locked=true;S.swing=null;
+  S.phase='posthit';S.locked=true;S.swing=null;S.nextDue=Infinity;
+  S.hitView={
+    start:ms,
+    turnEnd:ms+110,
+    holdUntil:ms+HIT_VIEW_HOLD_MS,
+    returnUntil:ms+HIT_VIEW_HOLD_MS+HIT_VIEW_RETURN_MS
+  };
   showPlateMarker();
 
   const pts=Math.round(100*physics.power);
@@ -714,7 +759,7 @@ function swing(now){
 canvas.addEventListener('pointerdown',e=>{
   const overlayCalOpen=ui.cal.classList.contains('open')&&window.innerWidth<1200;
   if(e.pointerType==='mouse'&&e.button!==0)return;
-  if(ui.start.style.display!=='none'||S.input||overlayCalOpen||S.phase==='batted'||S.phase==='swinging'||S.phase==='missed')return;
+  if(ui.start.style.display!=='none'||S.input||overlayCalOpen||S.phase==='posthit'||S.phase==='swinging'||S.phase==='missed')return;
   e.preventDefault();
   const hit=screenToAim(e.clientX,e.clientY);if(hit)S.aimWorld.copy(hit);
   S.input={id:e.pointerId,down:performance.now()};
@@ -724,7 +769,7 @@ canvas.addEventListener('pointermove',e=>{
   const hit=screenToAim(e.clientX,e.clientY);
   if(!hit)return;
   if(S.input&&e.pointerId===S.input.id){e.preventDefault();S.aimWorld.copy(hit);return}
-  if(e.pointerType==='mouse'&&ui.start.style.display==='none'&&!['batted','swinging','missed'].includes(S.phase))S.aimWorld.copy(hit);
+  if(e.pointerType==='mouse'&&ui.start.style.display==='none'&&!['posthit','swinging','missed'].includes(S.phase))S.aimWorld.copy(hit);
 },{passive:false});
 canvas.addEventListener('pointerup',e=>{
   if(!S.input||e.pointerId!==S.input.id)return;
@@ -746,10 +791,11 @@ swingDelay.oninput=()=>{dev.swingDelay=Number(swingDelay.value);saveDev();syncDe
 swingSpeed.oninput=()=>{dev.swingSpeed=Number(swingSpeed.value);saveDev();syncDevUI()};
 autoBtn.onclick=()=>{
   dev.auto=!dev.auto;saveDev();syncDevUI();
-  if(dev.auto&&S.phase!=='pitching'&&ui.start.style.display==='none')S.nextDue=performance.now()+300;
+  if(dev.auto&&S.phase==='waiting'&&ui.start.style.display==='none')armNextPitch(performance.now());
+  if(!dev.auto)S.nextDue=Infinity;
 };
 document.getElementById('throwNow').onclick=()=>{
-  if(ui.start.style.display!=='none')return;
+  if(ui.start.style.display!=='none'||['swinging','posthit'].includes(S.phase))return;
   nextPitch(performance.now());
 };
 document.getElementById('startBtn').onclick=begin;
@@ -762,7 +808,7 @@ new ResizeObserver(resize).observe(stage);resize();
 function animate(now){
   requestAnimationFrame(animate);
 
-  if(dev.auto&&ui.start.style.display==='none'&&!['pitching','swinging','missed','batted'].includes(S.phase)&&now>=S.nextDue)nextPitch(now);
+  if(dev.auto&&ui.start.style.display==='none'&&S.phase==='waiting'&&now>=S.nextDue)nextPitch(now);
 
   if(['pitching','swinging','missed'].includes(S.phase)){
     const u=(now-S.t0)/FLIGHT_MS[S.pitch.type];
@@ -777,12 +823,10 @@ function animate(now){
 
     if(S.phase==='swinging'&&S.swing){
       scanSwingCollision(now);
-      if(S.phase==='swinging'&&now>S.swing.start+S.swing.delay+FOLLOW_THROUGH_MS&&u>1.02){
-        finishSwingMiss();
-      }
+      if(S.phase==='swinging'&&now>S.swing.finishAt&&u>1.02)finishSwingMiss();
     }
 
-    if(u>1.10&&S.phase!=='batted'){
+    if(u>1.10&&S.phase!=='posthit'){
       const hadSwing=S.phase==='missed'||S.phase==='swinging';
       if(S.phase==='swinging'&&S.swing)finishSwingMiss();
       ball.visible=false;for(const t of trail)t.visible=false;showPlateMarker();
@@ -792,12 +836,14 @@ function animate(now){
         ui.result.classList.add('on');
         setTimeout(()=>ui.result.classList.remove('on'),650);
       }
-      if(S.phase!=='batted'){
-        S.phase='waiting';S.locked=false;S.swing=null;
-      }
+      if(S.phase!=='posthit')enterWaiting(now);
     }
-  }else if(S.phase==='batted'&&S.batted){
+  }else{
     ball.visible=false;for(const t of trail)t.visible=false;
+  }
+
+  // Batted-ball flight is independent from input readiness.
+  if(S.batted){
     const t=(now-S.batted.t0)/1000;
     const v=S.batted.velocity;
     battedBall.position.set(
@@ -805,6 +851,7 @@ function animate(now){
       S.batted.start.y+v.y*t-4.9*t*t,
       S.batted.start.z+v.z*t
     );
+    battedBall.visible=true;
     const pts=S.batted.points;
     if(!pts.length||pts[pts.length-1].distanceTo(battedBall.position)>.16){
       pts.push(battedBall.position.clone());
@@ -812,12 +859,13 @@ function animate(now){
       setBattedTrail(pts);
     }
     if((t>.18&&battedBall.position.y<=.04)||t>2.5){
-      battedBall.visible=false;S.batted=null;S.locked=false;S.phase='waiting';
+      battedBall.visible=false;S.batted=null;
     }
   }else{
-    ball.visible=false;battedBall.visible=false;for(const t of trail)t.visible=false;
+    battedBall.visible=false;
   }
 
+  updateCameraView(now);
   updateCursorBarrel();
   updateBat(now);
 
@@ -828,10 +876,12 @@ function animate(now){
     ui.power.style.width='100%';
   }
 
-  const remain=dev.auto&&ui.start.style.display==='none'?Math.max(0,S.nextDue-now):0;
+  const counting=dev.auto&&ui.start.style.display==='none'&&S.phase==='waiting'&&Number.isFinite(S.nextDue);
+  const remain=counting?Math.max(0,S.nextDue-now):0;
+  const phaseText=S.phase==='posthit'?'HIT VIEW → batting view':S.phase.toUpperCase();
   devStatus.textContent=dev.auto
-    ?'AUTO投球: 3.0秒間隔 / 次まで '+(remain/1000).toFixed(1)+'s / '+dev.pitchMode+' / '+dev.courseMode+' / '+dev.cursorPlane+' / delay '+dev.swingDelay+'ms'
-    :'AUTO停止中 / THROW NOWで1球 / '+dev.pitchMode+' / '+dev.courseMode+' / '+dev.cursorPlane+' / delay '+dev.swingDelay+'ms';
+    ?'AUTO: '+phaseText+(counting?' / next '+(remain/1000).toFixed(1)+'s':'')+' / '+dev.pitchMode+' / '+dev.courseMode+' / '+dev.cursorPlane+' / delay '+dev.swingDelay+'ms / speed '+Number(dev.swingSpeed).toFixed(2)+'x'
+    :'AUTO停止中 / THROW NOWで1球 / '+dev.pitchMode+' / '+dev.courseMode+' / '+dev.cursorPlane+' / delay '+dev.swingDelay+'ms / speed '+Number(dev.swingSpeed).toFixed(2)+'x';
 
   renderer.render(scene,camera);
 }
