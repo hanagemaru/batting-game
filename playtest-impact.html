@@ -156,13 +156,17 @@ import {PLATE_HALF,PLATE_FRONT,FLIGHT_MS,pitchPoint} from './pitch-model.js';
 
 
 const INTERVAL_MS=3000;
-const SWING_TO_IMPACT_MS=100;
 const ZONE_LOW=.52,ZONE_HIGH=1.16;
 const REACH_X=.17,REACH_Y=.18;
 const IMPACT_SLOPE=1.18;
-const TIMING_MISS_MS=58;
-const BARREL_RADIUS=.095;
-const BARREL_HALF_LEN=.19;
+const TIMING_MISS_MS=90;
+const BAT_LENGTH=.88;
+const SWEET_START=.54;
+const SWEET_END=.84;
+const BAT_RADIUS=.038;
+const BALL_RADIUS=.0365;
+const COLLISION_RADIUS=BAT_RADIUS+BALL_RADIUS+.010;
+const FOLLOW_THROUGH_MS=260;
 const stage=document.querySelector('#stage'),canvas=document.querySelector('#three');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -265,13 +269,16 @@ const STORAGE='batting-camera-v1';
 try{Object.assign(cfg,JSON.parse(localStorage.getItem(STORAGE)||'{}'))}catch(e){}
 for(const id of controlsIds){ctl[id].value=cfg[id]}
 
-const DEV_STORAGE='batting-dev-v1';
-const dev={pitchMode:'RANDOM',courseMode:'RANDOM',auto:true};
+const DEV_STORAGE='batting-impact-dev-v2';
+const dev={pitchMode:'RANDOM',courseMode:'RANDOM',cursorPlane:'STRIKE',swingDelay:0,auto:true};
 try{Object.assign(dev,JSON.parse(localStorage.getItem(DEV_STORAGE)||'{}'))}catch(e){}
-const pitchMode=document.getElementById('pitchMode'),courseMode=document.getElementById('courseMode'),autoBtn=document.getElementById('autoBtn'),devStatus=document.getElementById('devStatus');
-pitchMode.value=dev.pitchMode;courseMode.value=dev.courseMode;
+const pitchMode=document.getElementById('pitchMode'),courseMode=document.getElementById('courseMode'),cursorPlane=document.getElementById('cursorPlane'),swingDelay=document.getElementById('swingDelay'),autoBtn=document.getElementById('autoBtn'),devStatus=document.getElementById('devStatus'),impactStatus=document.getElementById('impactStatus');
 function saveDev(){try{localStorage.setItem(DEV_STORAGE,JSON.stringify(dev))}catch(e){}}
-function syncDevUI(){autoBtn.textContent=dev.auto?'AUTO: ON / 3s':'AUTO: OFF';pitchMode.value=dev.pitchMode;courseMode.value=dev.courseMode}
+function syncDevUI(){
+  autoBtn.textContent=dev.auto?'AUTO: ON / 3s':'AUTO: OFF';
+  pitchMode.value=dev.pitchMode;courseMode.value=dev.courseMode;cursorPlane.value=dev.cursorPlane;
+  swingDelay.value=dev.swingDelay;swingDelay.nextElementSibling.value=Math.round(dev.swingDelay)+'ms';
+}
 syncDevUI();
 
 function applyCamera(){
