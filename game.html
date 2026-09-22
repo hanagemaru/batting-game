@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#081017">
+<title>BATTER'S READ</title>
+<style>
+:root{color-scheme:dark;--bg:#071017;--panel:#0c151d;--line:#2b3946;--muted:#8fa0ad;--text:#eef4f7;--contact:#8de7b1;--power:#f4d15d}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;touch-action:none}
+body{display:flex;justify-content:center}
+.app{width:min(100%,620px);height:100dvh;display:grid;grid-template-rows:54px 1fr 58px;background:#05090d}
+header{display:grid;grid-template-columns:78px 1fr 92px;align-items:center;padding:max(6px,env(safe-area-inset-top)) 10px 4px;border-bottom:1px solid var(--line);background:#081017e8;z-index:4}
+.hlabel{font-size:8px;color:#7f919f;letter-spacing:.12em}.hvalue{font-size:17px;font-weight:900;margin-top:2px}.center{text-align:center}.title{font-size:11px;font-weight:900;letter-spacing:.12em}.pitchname{font-size:8px;color:#aebbc5;margin-top:3px}.right{text-align:right}
+.stage{position:relative;min-height:0;overflow:hidden;background:#071017}
+canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+.result{position:absolute;top:15%;left:50%;transform:translateX(-50%);font-size:34px;font-weight:1000;text-align:center;text-shadow:0 3px #000;pointer-events:none;opacity:0;z-index:3}
+.result.on{opacity:1}.result small{display:block;font-size:9px;margin-top:4px;letter-spacing:.12em}
+.cursor{position:absolute;width:30px;height:30px;border:2px solid var(--contact);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:3}
+.cursor:before,.cursor:after{content:"";position:absolute;left:50%;top:50%;background:#fff;transform:translate(-50%,-50%)}
+.cursor:before{width:12px;height:1px}.cursor:after{width:1px;height:12px}
+.hint{position:absolute;left:50%;top:8px;transform:translateX(-50%);font-size:8px;color:#a7b4be;background:#061018b8;border:1px solid #2b3946;padding:5px 7px;white-space:nowrap;pointer-events:none;z-index:2}
+.calBtn{display:none!important}.cal{display:none!important}
+.modeHud{position:absolute;left:8px;top:8px;z-index:4;display:flex;gap:6px;align-items:center;pointer-events:none}
+.modePill{background:#061018cc;border:1px solid #334653;padding:6px 8px;font-size:8px;font-weight:900;letter-spacing:.08em}
+.targetPill{background:#3a3011dd;border-color:#786826;color:#ffe991}
+.modeBack{position:absolute;right:8px;top:8px;z-index:5;text-decoration:none;color:#cbd6de;border:1px solid #40515e;background:#0a141cdd;padding:7px 8px;font-size:8px;font-weight:900}
+.sessionOverlay{position:absolute;inset:0;display:none;place-items:center;padding:18px;background:#04080ce8;z-index:12}.sessionOverlay.on{display:grid}
+.sessionCard{width:min(92%,390px);padding:20px 17px;border:1px solid #4b5e6c;background:linear-gradient(#17242e,#0c141b);box-shadow:8px 8px 0 #020304}.sessionCard h2{font-size:27px;margin:8px 0}.sessionScore{font-size:44px;font-weight:1000}.sessionMeta{font:11px/1.7 system-ui,sans-serif;color:#9fb0bc;margin:8px 0 14px}.sessionActions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.sessionActions a,.sessionActions button{display:grid;place-items:center;min-height:44px;text-decoration:none;border:1px solid #546775;background:#17242d;color:#eef4f7;font:900 10px ui-monospace,monospace}.sessionActions button{background:#f4d15d;color:#17140a;border-color:#fff0a8}.adSlot{display:none}
+.cal{position:absolute;inset:auto 8px 8px 8px;max-height:67%;overflow:auto;background:#081017f2;border:1px solid #425361;padding:10px;z-index:6;display:none;backdrop-filter:blur(8px)}
+.cal.open{display:block}.cal h2{font-size:10px;margin:0 0 8px;letter-spacing:.12em}.cal h2:not(:first-child){margin-top:14px;padding-top:10px;border-top:1px solid #2f3d49}
+.grid{display:grid;grid-template-columns:1fr;gap:8px}.ctrl{display:grid;grid-template-columns:98px 1fr 48px;gap:7px;align-items:center}.ctrl label{font-size:8px;color:#d3dde5;line-height:1.25}.ctrl label small{display:block;margin-top:2px;color:#718493;font:7px/1.35 system-ui,sans-serif}.ctrl output{font-size:8px;text-align:right;color:#fff}input[type=range]{width:100%;accent-color:#8de7b1}
+.devGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.devField{display:grid;gap:4px;font-size:8px;color:#aebbc5}.devField select{width:100%;min-height:36px;border:1px solid #415364;background:#111c25;color:#eef4f7;padding:0 8px;font:900 9px ui-monospace,monospace}.devNote{font:8px/1.55 system-ui,sans-serif;color:#8092a0;margin-top:7px}.devStatus{font-size:8px;color:#9fdcc1;margin-top:7px}
+.calActions{display:flex;gap:7px;margin-top:9px}.calActions button{flex:1;min-height:36px;border:1px solid #415364;background:#15212b;color:#eef4f7;font:900 9px ui-monospace,monospace}
+.meters{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:#081017}
+.meter{font-size:8px;color:#9eacb7}.track{height:7px;margin-top:5px;background:#15212a}.fill{height:100%;width:0;background:var(--contact)}.power{background:var(--power)}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;padding:18px;background:#04080cda;z-index:8}.card{width:min(92%,390px);padding:18px 16px;border:1px solid #465866;background:linear-gradient(#17222c,#0f171f);box-shadow:7px 7px 0 #020304}.eyebrow{font-size:8px;color:#f4d15d;letter-spacing:.18em;font-weight:900}.card h1{font-size:25px;line-height:1.18;margin:8px 0 10px}.card p{font:12px/1.7 system-ui,sans-serif;color:#b5c0ca;margin:0}.card button{width:100%;min-height:46px;margin-top:14px;border:1px solid #fff0a8;background:#f4d15d;color:#17140a;font:900 12px ui-monospace,monospace}
+@media(min-width:720px){.grid{grid-template-columns:1fr 1fr}.cal{left:auto;width:470px}.app{border-left:1px solid #24313b;border-right:1px solid #24313b}}
+@media(min-width:1200px){
+  body{justify-content:flex-start;padding-left:calc(50vw - 534px)}
+  .app{width:620px;flex:0 0 620px}
+  .cal{
+    position:fixed;
+    left:calc(50vw + 104px);
+    right:auto;
+    top:12px;
+    bottom:12px;
+    width:430px;
+    max-height:none;
+    overflow:auto;
+    inset:auto auto 12px calc(50vw + 104px);
+    background:#081017f7;
+    box-shadow:0 0 0 1px #18242d,10px 10px 28px #0008;
+  }
+  .calBtn{right:8px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div><div class="hlabel">PITCH</div><div class="hvalue"><span id="pitchNo">0</span><span id="pitchLimit" style="font-size:10px;color:#71808d"> / 10</span></div></div>
+  <div class="center"><div id="modeTitle" class="title">BATTER'S READ</div><div id="pitchInfo" class="pitchname">FAST</div></div>
+  <div class="right"><div class="hlabel">SCORE</div><div id="score" class="hvalue">0000</div></div>
+</header>
+
+<section class="stage" id="stage">
+  <canvas id="three"></canvas>
+  <div class="hint">ドラッグで狙う → 投球中に離してスイング</div>
+  <div class="modeHud"><div id="modeStatus" class="modePill"></div><div id="targetStatus" class="modePill targetPill" style="display:none"></div></div>
+  <a class="modeBack" href="./modes.html">MODES</a>
+  <button id="calBtn" class="calBtn">CALIBRATE →</button>
+  <div id="cursor" class="cursor" style="display:none"></div>
+  <div id="result" class="result"></div>
+
+  <aside id="cal" class="cal">
+    <h2>DEV PITCH CONTROL</h2>
+    <div class="devGrid">
+      <label class="devField">球種
+        <select id="pitchMode">
+          <option value="RANDOM">RANDOM</option>
+          <option value="FAST">FAST</option>
+          <option value="CURVE">CURVE</option>
+          <option value="FORK">FORK</option>
+        </select>
+      </label>
+      <label class="devField">コース（右打者基準）
+        <select id="courseMode">
+          <option value="RANDOM">RANDOM</option>
+          <option value="CENTER">CENTER</option>
+          <option value="INSIDE">INSIDE</option>
+          <option value="OUTSIDE">OUTSIDE</option>
+          <option value="HIGH">HIGH</option>
+          <option value="LOW">LOW</option>
+          <option value="IN_HIGH">IN-HIGH</option>
+          <option value="IN_LOW">IN-LOW</option>
+          <option value="OUT_HIGH">OUT-HIGH</option>
+          <option value="OUT_LOW">OUT-LOW</option>
+          <option value="BALL_INSIDE">BALL / INSIDE</option>
+          <option value="BALL_OUTSIDE">BALL / OUTSIDE</option>
+          <option value="BALL_HIGH">BALL / HIGH</option>
+          <option value="BALL_LOW">BALL / LOW</option>
+        </select>
+      </label>
+    </div>
+    <div class="devGrid" style="margin-top:8px">
+      <label class="devField">カーソル表示面
+        <select id="cursorPlane">
+          <option value="STRIKE">STRIKE PLANE</option>
+          <option value="IMPACT">IMPACT SURFACE</option>
+        </select>
+      </label>
+      <label class="devField">Swing delay
+        <div class="ctrl" style="grid-template-columns:1fr 48px">
+          <input id="swingDelay" type="range" min="0" max="180" step="10" value="0"><output>0ms</output>
+        </div>
+      </label>
+      <label class="devField">Swing speed
+        <div class="ctrl" style="grid-template-columns:1fr 48px">
+          <input id="swingSpeed" type="range" min="1" max="4" step="0.25" value="2"><output>2.00x</output>
+        </div>
+      </label>
+    </div>
+    <div class="calActions"><button id="throwNow">THROW NOW</button><button id="autoBtn">AUTO: ON / 3s</button></div>
+    <div id="devStatus" class="devStatus">AUTO投球: 3.0秒間隔</div>
+    <div id="impactStatus" class="devStatus">CONTACT: —</div>
+    <div class="devNote">INSIDE = 右打者に近い三塁側（+X）、OUTSIDE = 一塁側（−X）。BALL系はゾーン外を検証します。<br>STRIKE PLANEはカーソルをホームベース前端のストライクゾーン面に表示し、IMPACT SURFACEはコースごとの標準インパクト面に表示します。物理判定はどちらも同じ3Dスイングモデルです。Swing delayはスイング開始前の待ち時間、Swing speedは実際のバット移動速度です。</div>
+
+    <h2>BATTER CAMERA CALIBRATION</h2>
+    <div class="grid">
+      <div class="ctrl"><label>Camera X <small>打者の目を左右へ平行移動。+で三塁側。向きは維持。</small></label><input id="eyeX" type="range" min="0.20" max="1.18" step="0.01" value="0.69"><output></output></div>
+      <div class="ctrl"><label>Camera Y <small>打者の目を上下へ平行移動。+で高く。向きは維持。</small></label><input id="eyeY" type="range" min="1.00" max="1.90" step="0.01" value="1.45"><output></output></div>
+      <div class="ctrl"><label>Camera Z <small>打者の目を前後へ平行移動。+で投手側。向きは維持。</small></label><input id="eyeZ" type="range" min="-0.80" max="0.80" step="0.01" value="0.00"><output></output></div>
+      <div class="ctrl"><label>Look X <small>カメラの向きだけを左右へ調整。</small></label><input id="lookX" type="range" min="-0.60" max="1.60" step="0.01" value="0.43"><output></output></div>
+      <div class="ctrl"><label>Look Y <small>カメラの向きだけを上下へ調整。</small></label><input id="lookY" type="range" min="0.30" max="2.20" step="0.01" value="1.24"><output></output></div>
+      <div class="ctrl"><label>Look Z <small>見る方向の奥行を調整。小さいほどホーム寄り。</small></label><input id="lookZ" type="range" min="-0.80" max="3.00" step="0.01" value="0.43"><output></output></div>
+      <div class="ctrl"><label>FOV <small>縦方向の視野角。+で広角。80°を新しい基準値に設定。</small></label><input id="fov" type="range" min="55" max="105" step="1" value="80"><output></output></div>
+    </div>
+    <div class="devNote">Camera X / Y / Z はカメラ本体を平行移動し、Look点も同じ量だけ移動します。<br><br>この試作のカーソルはストライクゾーン面ではなく、インコースほど投手側・アウトコースほど捕手側になる「標準インパクト面」上に置かれます。</div>
+    <div class="calActions"><button id="resetCam">RESET CAMERA</button><button id="closeCal">CLOSE</button></div>
+  </aside>
+
+  <div id="start" class="overlay">
+    <div class="card">
+      <div id="startEyebrow" class="eyebrow">BATTER'S READ</div>
+      <h1 id="startTitle">10球 SCORE ATTACK</h1>
+      <p id="startCopy">10球で合計スコアを伸ばす。</p>
+      <button id="startBtn">START</button>
+    </div>
+  </div>
+  <div id="sessionEnd" class="sessionOverlay">
+    <div class="sessionCard">
+      <div id="endEyebrow" class="eyebrow">SESSION COMPLETE</div>
+      <h2 id="endTitle">RESULT</h2>
+      <div id="endScore" class="sessionScore">0</div>
+      <div id="endMeta" class="sessionMeta"></div>
+      <div id="adSlot" class="adSlot" aria-hidden="true">RESULT_AD_SLOT</div>
+      <div class="sessionActions"><a href="./modes.html">MODES</a><button id="retryBtn">RETRY</button></div>
+    </div>
+  </div>
+</section>
+
+<div class="meters">
+  <div class="meter">TIMING<div class="track"><div id="contact" class="fill"></div></div></div>
+  <div class="meter">MAX POWER<div class="track"><div id="power" class="fill power"></div></div></div>
+</div>
+</div>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import {PLATE_HALF,PLATE_FRONT,FLIGHT_MS,pitchPoint} from './pitch-model.js';
+
+const MODE=(new URLSearchParams(location.search).get('mode')||'score').toLowerCase();
+const RULES={
+  score:{key:'score',title:'10球 SCORE ATTACK',limit:10,intro:'10球で合計スコアを伸ばす。強いコンタクトほど高得点。'},
+  target:{key:'target',title:'TARGET CHALLENGE',limit:12,intro:'指定された方向へ打ち分ける。方向成功で100点ボーナス。'},
+  survival:{key:'survival',title:'3 OUT SURVIVAL',limit:Infinity,intro:'ミス・見逃し3回で終了。連続ヒットでコンボ倍率が上がる。'}
+};
+const rule=RULES[MODE]||RULES.score;
+const targetCycle=['PULL','CENTER','OPPOSITE'];
+let session={score:0,hits:0,misses:0,outs:0,combo:0,bestCombo:0,targetHits:0,ended:false,currentTarget:null};
+
+function targetForPitch(n){return targetCycle[(n-1)%targetCycle.length]}
+function sprayMatchesTarget(deg,target){
+  if(target==='PULL')return deg>=10;
+  if(target==='OPPOSITE')return deg<=-10;
+  return deg>-10&&deg<10;
+}
+function renderModeUI(){
+  document.getElementById('modeTitle').textContent=rule.title;
+  document.getElementById('pitchLimit').textContent=Number.isFinite(rule.limit)?' / '+rule.limit:' / ∞';
+  document.getElementById('startTitle').textContent=rule.title;
+  document.getElementById('startCopy').textContent=rule.intro;
+  document.getElementById('startEyebrow').textContent='BATTER\'S READ / '+rule.key.toUpperCase();
+  updateSessionHud();
+}
+function updateSessionHud(){
+  const el=document.getElementById('modeStatus'),target=document.getElementById('targetStatus');
+  if(rule.key==='survival')el.textContent='OUT '+session.outs+'/3 · COMBO '+session.combo;
+  else if(rule.key==='target')el.textContent='HIT '+session.targetHits+' · '+session.score+' PTS';
+  else el.textContent='HIT '+session.hits+' · '+session.score+' PTS';
+  if(rule.key==='target'&&session.currentTarget){target.style.display='block';target.textContent='TARGET '+session.currentTarget}
+  else target.style.display='none';
+}
+function saveBest(){
+  const key='batting-best-'+rule.key;
+  const old=Number(localStorage.getItem(key)||0);
+  if(session.score>old)localStorage.setItem(key,String(session.score));
+  return Math.max(old,session.score);
+}
+function sessionShouldEnd(){
+  if(session.ended)return true;
+  if(rule.key==='survival')return session.outs>=3;
+  return S.n>=rule.limit;
+}
+function endSession(){
+  if(session.ended)return;
+  session.ended=true;S.phase='ended';S.locked=true;S.nextDue=Infinity;
+  const best=saveBest();
+  document.getElementById('endTitle').textContent=rule.title;
+  document.getElementById('endScore').textContent=session.score+' PTS';
+  const detail=rule.key==='survival'
+    ?'HITS '+session.hits+' · BEST COMBO '+session.bestCombo+' · BEST SCORE '+best
+    :rule.key==='target'
+      ?'TARGET '+session.targetHits+'/'+rule.limit+' · HITS '+session.hits+' · BEST '+best
+      :'HITS '+session.hits+'/'+rule.limit+' · BEST '+best;
+  document.getElementById('endMeta').textContent=detail;
+  document.getElementById('sessionEnd').classList.add('on');
+}
+function registerHit(physics,batted){
+  session.hits++;
+  const base=Math.round(100*physics.power);
+  let gained=base,label='';
+  if(rule.key==='target'){
+    const ok=sprayMatchesTarget(batted.sprayDeg,session.currentTarget);
+    if(ok){gained+=100;session.targetHits++;label=' · TARGET +100'}
+  }else if(rule.key==='survival'){
+    session.combo++;session.bestCombo=Math.max(session.bestCombo,session.combo);
+    const mult=Math.min(2.5,1+(session.combo-1)*.15);
+    gained=Math.round(base*mult);label=' · x'+mult.toFixed(2);
+  }
+  session.score+=gained;S.score=session.score;
+  ui.score.textContent=String(session.score).padStart(4,'0');
+  updateSessionHud();
+  return{gained,label};
+}
+function registerFailure(kind){
+  session.misses++;session.combo=0;
+  if(rule.key==='survival')session.outs++;
+  updateSessionHud();
+}
+function resetSession(){
+  session={score:0,hits:0,misses:0,outs:0,combo:0,bestCombo:0,targetHits:0,ended:false,currentTarget:null};
+  document.getElementById('sessionEnd').classList.remove('on');
+  renderModeUI();
+}
+
+const INTERVAL_MS=3000;
+const ZONE_LOW=.52,ZONE_HIGH=1.16;
+const REACH_X=.17,REACH_Y=.18;
+const IMPACT_SLOPE=1.18;
+const TIMING_MISS_MS=90;
+const BAT_LENGTH=.864; // 34 in adult bat
+const BAT_BARREL_RADIUS=.033; // ~2.6 in max diameter
+const BAT_HANDLE_RADIUS=.014;
+const GRIP_TO_CONTACT=.72;
+const SWEET_START=.56;
+const SWEET_END=.82;
+const BAT_RADIUS=.033;
+const BALL_RADIUS=.0365;
+const COLLISION_RADIUS=BAT_RADIUS+BALL_RADIUS+.009;
+const BASE_TO_CONTACT_MS=100;
+const BASE_FOLLOW_THROUGH_MS=220;
+const HIT_VIEW_HOLD_MS=500;
+const HIT_VIEW_RETURN_MS=150;
+const stage=document.querySelector('#stage'),canvas=document.querySelector('#three');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.shadowMap.enabled=true;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x081017);
+scene.fog=new THREE.Fog(0x081017,24,48);
+scene.add(new THREE.HemisphereLight(0xbfdcff,0x24301f,2.0));
+const sun=new THREE.DirectionalLight(0xffffff,2.2);sun.position.set(-6,10,-4);scene.add(sun);
+
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(28,46),new THREE.MeshStandardMaterial({color:0x264332,roughness:1}));
+ground.rotation.x=-Math.PI/2;ground.position.z=8.5;scene.add(ground);
+const dirt=new THREE.Mesh(new THREE.CircleGeometry(4.1,64),new THREE.MeshStandardMaterial({color:0x6b523d,roughness:1}));
+dirt.rotation.x=-Math.PI/2;dirt.position.set(0,.006,0);dirt.scale.set(1,1.3,1);scene.add(dirt);
+
+const INCH=.0254,FOOT=.3048,PLATE_SHOULDER=PLATE_HALF;
+const pverts=new Float32Array([
+  -PLATE_HALF,.018,PLATE_FRONT, PLATE_HALF,.018,PLATE_FRONT, PLATE_HALF,.018,PLATE_SHOULDER,
+  0,.018,0, -PLATE_HALF,.018,PLATE_SHOULDER
+]);
+const plateGeo=new THREE.BufferGeometry();plateGeo.setAttribute('position',new THREE.BufferAttribute(pverts,3));plateGeo.setIndex([0,1,2,0,2,4,4,2,3]);plateGeo.computeVertexNormals();
+scene.add(new THREE.Mesh(plateGeo,new THREE.MeshStandardMaterial({color:0xffffff,side:THREE.DoubleSide})));
+
+function lineRect(x1,x2,z1,z2,color=0xffffff){
+  const pts=[new THREE.Vector3(x1,.025,z1),new THREE.Vector3(x2,.025,z1),new THREE.Vector3(x2,.025,z2),new THREE.Vector3(x1,.025,z2),new THREE.Vector3(x1,.025,z1)];
+  return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color,transparent:true,opacity:.72}));
+}
+const BOX_INNER=PLATE_HALF+6*INCH,BOX_OUTER=BOX_INNER+4*FOOT,BOX_CENTER_Z=PLATE_FRONT/2,BOX_HALF_LEN=3*FOOT;
+scene.add(lineRect(-BOX_OUTER,-BOX_INNER,BOX_CENTER_Z-BOX_HALF_LEN,BOX_CENTER_Z+BOX_HALF_LEN,0xded8c8));
+scene.add(lineRect( BOX_INNER, BOX_OUTER,BOX_CENTER_Z-BOX_HALF_LEN,BOX_CENTER_Z+BOX_HALF_LEN,0xded8c8));
+
+const foulGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-7,.03,7),new THREE.Vector3(0,.03,0),new THREE.Vector3(7,.03,7)]);
+scene.add(new THREE.Line(foulGeo,new THREE.LineBasicMaterial({color:0xece7da,transparent:true,opacity:.36})));
+
+const zonePts=[
+  new THREE.Vector3(-PLATE_HALF,.52,PLATE_FRONT),new THREE.Vector3(PLATE_HALF,.52,PLATE_FRONT),
+  new THREE.Vector3(PLATE_HALF,1.16,PLATE_FRONT),new THREE.Vector3(-PLATE_HALF,1.16,PLATE_FRONT),
+  new THREE.Vector3(-PLATE_HALF,.52,PLATE_FRONT)
+];
+scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(zonePts),new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.62})));
+
+const pitcher=new THREE.Group();
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(.18,.72,5,10),new THREE.MeshStandardMaterial({color:0x485c6d}));
+body.position.y=1.03;pitcher.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.13,18,12),new THREE.MeshStandardMaterial({color:0xd7b08a}));
+head.position.y=1.58;pitcher.add(head);
+pitcher.position.set(0,0,18.09);scene.add(pitcher);
+const rubber=new THREE.Mesh(new THREE.BoxGeometry(24*INCH,.025,6*INCH),new THREE.MeshStandardMaterial({color:0xe8e5dc}));
+rubber.position.set(0,.018,18.44+3*INCH);scene.add(rubber);
+
+const ball=new THREE.Mesh(new THREE.SphereGeometry(.0365,20,14),new THREE.MeshStandardMaterial({color:0xf7f3e9,roughness:.55}));
+scene.add(ball);
+
+const trail=[];
+for(let i=0;i<6;i++){const m=new THREE.Mesh(new THREE.SphereGeometry(.028,12,8),new THREE.MeshBasicMaterial({color:0xbfe5ff,transparent:true,opacity:.11+i*.02}));scene.add(m);trail.push(m)}
+
+const plateCrossMarker=new THREE.Mesh(
+  new THREE.RingGeometry(.052,.078,28),
+  new THREE.MeshBasicMaterial({color:0xffdc70,side:THREE.DoubleSide,transparent:true,opacity:.95,depthTest:false})
+);
+plateCrossMarker.visible=false;
+scene.add(plateCrossMarker);
+
+const camera=new THREE.PerspectiveCamera(80,1,.03,80);
+scene.add(camera);
+
+// The visible bat now lives in world space. Local +Y runs from hands -> barrel tip.
+// That makes its rendered path use the same geometry as collision detection.
+const worldBat=new THREE.Group();
+const batMesh=new THREE.Mesh(
+  new THREE.CylinderGeometry(BAT_BARREL_RADIUS,BAT_HANDLE_RADIUS,BAT_LENGTH,18),
+  new THREE.MeshStandardMaterial({color:0xc79a63,roughness:.60,metalness:.02})
+);
+batMesh.position.y=BAT_LENGTH/2;
+worldBat.add(batMesh);
+const skinMat=new THREE.MeshStandardMaterial({color:0xd2a07a,roughness:.8});
+const handA=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),skinMat);
+const handB=new THREE.Mesh(new THREE.SphereGeometry(.034,12,8),skinMat);
+handA.position.y=.030;handB.position.y=.090;
+worldBat.add(handA,handB);
+scene.add(worldBat);
+
+// Ghost barrel = aiming cursor. Its display plane is switchable in the dev panel.
+const cursorBarrel=new THREE.Mesh(
+  new THREE.CapsuleGeometry(.045,.28,5,12),
+  new THREE.MeshStandardMaterial({color:0x8de7b1,transparent:true,opacity:.58,emissive:0x173f2b,depthTest:false})
+);
+cursorBarrel.renderOrder=4;
+scene.add(cursorBarrel);
+
+const contactMarker=new THREE.Mesh(
+  new THREE.SphereGeometry(.055,16,10),
+  new THREE.MeshBasicMaterial({color:0xffaa62,transparent:true,opacity:.95,depthTest:false})
+);
+contactMarker.visible=false;contactMarker.renderOrder=5;scene.add(contactMarker);
+
+const battedBall=new THREE.Mesh(
+  new THREE.SphereGeometry(BALL_RADIUS,20,14),
+  new THREE.MeshStandardMaterial({color:0xffffff,roughness:.48})
+);
+battedBall.visible=false;
+scene.add(battedBall);
+
+const incomingImpactTrail=new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
+  new THREE.LineBasicMaterial({color:0xbfe5ff,transparent:true,opacity:.78})
+);
+incomingImpactTrail.visible=false;scene.add(incomingImpactTrail);
+
+const battedTrail=new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
+  new THREE.LineBasicMaterial({color:0xffd071,transparent:true,opacity:.78})
+);
+battedTrail.visible=false;scene.add(battedTrail);
+
+const cfg={eyeX:.69,eyeY:1.45,eyeZ:0.00,lookX:.43,lookY:1.24,lookZ:.43,fov:80};
+const cfgDefaults={...cfg};
+const controlsIds=['eyeX','eyeY','eyeZ','lookX','lookY','lookZ','fov'];
+const ctl=Object.fromEntries(controlsIds.map(id=>[id,document.getElementById(id)]));
+const STORAGE='batting-camera-v1';
+try{Object.assign(cfg,JSON.parse(localStorage.getItem(STORAGE)||'{}'))}catch(e){}
+for(const id of controlsIds){ctl[id].value=cfg[id]}
+
+const DEV_STORAGE='batting-impact-dev-v2';
+const dev={pitchMode:'RANDOM',courseMode:'RANDOM',cursorPlane:'STRIKE',swingDelay:0,swingSpeed:2,auto:true};
+try{Object.assign(dev,JSON.parse(localStorage.getItem(DEV_STORAGE)||'{}'))}catch(e){}
+const pitchMode=document.getElementById('pitchMode'),courseMode=document.getElementById('courseMode'),cursorPlane=document.getElementById('cursorPlane'),swingDelay=document.getElementById('swingDelay'),swingSpeed=document.getElementById('swingSpeed'),autoBtn=document.getElementById('autoBtn'),devStatus=document.getElementById('devStatus'),impactStatus=document.getElementById('impactStatus');
+function saveDev(){try{localStorage.setItem(DEV_STORAGE,JSON.stringify(dev))}catch(e){}}
+function syncDevUI(){
+  autoBtn.textContent=dev.auto?'AUTO: ON / 3s':'AUTO: OFF';
+  pitchMode.value=dev.pitchMode;courseMode.value=dev.courseMode;cursorPlane.value=dev.cursorPlane;
+  swingDelay.value=dev.swingDelay;swingDelay.nextElementSibling.value=Math.round(dev.swingDelay)+'ms';
+  swingSpeed.value=dev.swingSpeed;swingSpeed.nextElementSibling.value=Number(dev.swingSpeed).toFixed(2)+'x';
+}
+syncDevUI();
+dev.pitchMode='RANDOM';dev.courseMode='RANDOM';dev.cursorPlane='STRIKE';dev.swingDelay=0;dev.swingSpeed=2;dev.auto=true;
+syncDevUI();
+
+function applyCamera(){
+  for(const id of controlsIds){
+    cfg[id]=Number(ctl[id].value);
+    ctl[id].nextElementSibling.value=id==='fov'?Math.round(cfg[id])+'°':cfg[id].toFixed(2);
+  }
+  camera.position.set(cfg.eyeX,cfg.eyeY,cfg.eyeZ);
+  camera.fov=cfg.fov;
+  camera.lookAt(cfg.lookX,cfg.lookY,cfg.lookZ);
+  camera.updateProjectionMatrix();
+  try{localStorage.setItem(STORAGE,JSON.stringify(cfg))}catch(e){}
+}
+const eyeToLook={eyeX:'lookX',eyeY:'lookY',eyeZ:'lookZ'};
+for(const id of controlsIds){
+  ctl[id].addEventListener('input',()=>{
+    if(eyeToLook[id]){
+      const nextEye=Number(ctl[id].value);
+      const delta=nextEye-cfg[id];
+      const lookId=eyeToLook[id];
+      ctl[lookId].value=(Number(ctl[lookId].value)+delta).toFixed(2);
+    }
+    applyCamera();
+  });
+}
+applyCamera();
+
+const ui={
+ pitchNo:document.getElementById('pitchNo'),score:document.getElementById('score'),pitchInfo:document.getElementById('pitchInfo'),
+ cursor:document.getElementById('cursor'),result:document.getElementById('result'),contact:document.getElementById('contact'),power:document.getElementById('power'),
+ cal:document.getElementById('cal'),start:document.getElementById('start')
+};
+
+let S={phase:'idle',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rand=(a,b)=>a+Math.random()*(b-a);
+const cameraProbe=new THREE.PerspectiveCamera();
+
+function lookQuaternion(target){
+  cameraProbe.position.set(cfg.eyeX,cfg.eyeY,cfg.eyeZ);
+  cameraProbe.up.set(0,1,0);
+  cameraProbe.lookAt(target);
+  return cameraProbe.quaternion.clone();
+}
+function armNextPitch(now){
+  S.nextDue=dev.auto?now+INTERVAL_MS:Infinity;
+}
+function enterWaiting(now){
+  S.phase='waiting';S.locked=false;S.swing=null;
+  if(sessionShouldEnd()){endSession();return}
+  armNextPitch(now);
+}
+function updateCameraView(now){
+  camera.position.set(cfg.eyeX,cfg.eyeY,cfg.eyeZ);
+  camera.fov=cfg.fov;camera.updateProjectionMatrix();
+  const baseQ=lookQuaternion(new THREE.Vector3(cfg.lookX,cfg.lookY,cfg.lookZ));
+  if(!S.hitView){
+    camera.quaternion.copy(baseQ);
+    return;
+  }
+  const frontQ=lookQuaternion(new THREE.Vector3(0,1.05,18.44));
+  const hv=S.hitView;
+  if(now<hv.turnEnd){
+    const t=clamp((now-hv.start)/Math.max(1,hv.turnEnd-hv.start),0,1);
+    camera.quaternion.copy(baseQ).slerp(frontQ,t*t*(3-2*t));
+  }else if(now<hv.holdUntil){
+    camera.quaternion.copy(frontQ);
+  }else if(now<hv.returnUntil){
+    const t=clamp((now-hv.holdUntil)/Math.max(1,hv.returnUntil-hv.holdUntil),0,1);
+    camera.quaternion.copy(frontQ).slerp(baseQ,t*t*(3-2*t));
+  }else{
+    camera.quaternion.copy(baseQ);
+    S.hitView=null;
+    if(S.phase==='posthit')enterWaiting(now);
+  }
+}
+
+function selectedType(){
+  if(dev.pitchMode!=='RANDOM')return dev.pitchMode;
+  const names=['FAST','FAST','FAST','CURVE','CURVE','FORK'];
+  return names[Math.floor(Math.random()*names.length)];
+}
+function selectedTarget(){
+  if(dev.courseMode==='RANDOM')return{x:rand(-PLATE_HALF+.035,PLATE_HALF-.035),y:rand(.56,1.12),z:PLATE_FRONT,label:'RANDOM'};
+  const presets={
+    CENTER:[0,.84],INSIDE:[.15,.84],OUTSIDE:[-.15,.84],HIGH:[0,1.07],LOW:[0,.60],
+    IN_HIGH:[.15,1.07],IN_LOW:[.15,.60],OUT_HIGH:[-.15,1.07],OUT_LOW:[-.15,.60],
+    BALL_INSIDE:[.34,.84],BALL_OUTSIDE:[-.34,.84],BALL_HIGH:[0,1.32],BALL_LOW:[0,.36]
+  };
+  const p=presets[dev.courseMode]||presets.CENTER;
+  return{x:p[0]+rand(-.018,.018),y:p[1]+rand(-.025,.025),z:PLATE_FRONT,label:dev.courseMode};
+}
+function makePitch(){
+  const type=selectedType(),target=selectedTarget();
+  return{
+    type,course:target.label,
+    release:{x:rand(.08,.28),y:rand(1.72,1.90),z:rand(16.55,17.05)},
+    target,
+    dir:Math.random()<.5?-1:1,
+    breakX:type==='CURVE'?rand(.18,.30):0,
+    breakY:type==='FORK'?rand(.16,.23):type==='CURVE'?rand(.07,.13):.055
+  };
+}
+function nextPitch(now=performance.now()){
+  if(sessionShouldEnd()){endSession();return}
+  S.n++;S.pitch=makePitch();S.t0=now;S.nextDue=Infinity;S.locked=false;
+  if(rule.key==='target')session.currentTarget=targetForPitch(S.n);
+  updateSessionHud();S.swing=null;S.visualSwing=null;S.batted=null;S.markerShown=false;S.phase='pitching';
+  ball.visible=true;battedBall.visible=false;incomingImpactTrail.visible=false;battedTrail.visible=false;plateCrossMarker.visible=false;contactMarker.visible=false;for(const t of trail)t.visible=true;
+  ui.pitchNo.textContent=S.n;
+  ui.pitchInfo.textContent=S.pitch.type+' · '+S.pitch.course+' · '+FLIGHT_MS[S.pitch.type]+'ms';
+  ui.result.classList.remove('on');ui.result.textContent='';
+  impactStatus.textContent='CONTACT: —';
+}
+function begin(){
+  resetSession();
+  S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null};
+  ui.score.textContent='0000';ui.pitchNo.textContent='0';ui.start.style.display='none';
+  nextPitch(performance.now()+250)
+}
+
+function pitchPosition(u){
+  const p=pitchPointExtended(S.pitch,u);return new THREE.Vector3(p.x,p.y,p.z)
+}
+function pitchPointExtended(pitch,u){
+  if(u<=1)return pitchPoint(pitch,Math.max(0,u));
+  const a=pitchPoint(pitch,.96),b=pitchPoint(pitch,1),k=(u-1)/.04;
+  return{
+    x:b.x+(b.x-a.x)*k,
+    y:b.y+(b.y-a.y)*k,
+    z:b.z+(b.z-a.z)*k
+  }
+}
+function idealImpactZ(x){
+  return PLATE_FRONT+IMPACT_SLOPE*x;
+}
+function idealImpactU(pitch){
+  const z=idealImpactZ(pitch.target.x);
+  return (pitch.release.z-z)/(pitch.release.z-pitch.target.z);
+}
+function locationCap(target){
+  const ox=Math.max(0,Math.abs(target.x)-PLATE_HALF)/REACH_X;
+  const oy=Math.max(0,target.y-ZONE_HIGH,ZONE_LOW-target.y)/REACH_Y;
+  const outside=Math.max(ox,oy);
+  return{reachable:outside<=1,cap:clamp(1-.30*outside,.70,1),outside};
+}
+function barrelAngle(x,y){
+  const inside=clamp((x+PLATE_HALF)/(2*PLATE_HALF),0,1);
+  const high=clamp((y-ZONE_LOW)/(ZONE_HIGH-ZONE_LOW),0,1);
+  return THREE.MathUtils.degToRad(5+20*inside+20*(1-high));
+}
+function rotateY(v,a){
+  const c=Math.cos(a),sn=Math.sin(a);
+  return new THREE.Vector3(v.x*c+v.z*sn,v.y,-v.x*sn+v.z*c);
+}
+function impactBatPose(x,y){
+  const inside=clamp((x+PLATE_HALF)/(2*PLATE_HALF),0,1);
+  const tilt=barrelAngle(x,y);
+  const forward=THREE.MathUtils.degToRad(10+25*inside);
+  const h=Math.cos(tilt);
+  const dir=new THREE.Vector3(-h*Math.cos(forward),-Math.sin(tilt),h*Math.sin(forward)).normalize();
+  const contact=new THREE.Vector3(x,y,idealImpactZ(x));
+  const hand=contact.clone().addScaledVector(dir,-GRIP_TO_CONTACT);
+  return{hand,dir,contact};
+}
+function battingViewBasis(){
+  const eye=new THREE.Vector3(cfg.eyeX,cfg.eyeY,cfg.eyeZ);
+  const look=new THREE.Vector3(cfg.lookX,cfg.lookY,cfg.lookZ);
+  const fwd=look.clone().sub(eye).normalize();
+  const right=new THREE.Vector3().crossVectors(fwd,new THREE.Vector3(0,1,0)).normalize();
+  return{eye,fwd,right,up:new THREE.Vector3(0,1,0)};
+}
+function stanceStartPose(){
+  const b=battingViewBasis();
+  const hand=b.eye.clone()
+    .addScaledVector(b.right,.34)
+    .addScaledVector(b.up,-.34)
+    .addScaledVector(b.fwd,-.16);
+  const dir=b.right.clone().multiplyScalar(.72)
+    .addScaledVector(b.up,.62)
+    .addScaledVector(b.fwd,-.18)
+    .normalize();
+  return{hand,dir};
+}
+function swingPoseBundle(x,y){
+  const impact=impactBatPose(x,y);
+  const start=stanceStartPose();
+
+  const ih=new THREE.Vector3(impact.dir.x,0,impact.dir.z).normalize();
+  const fh=rotateY(ih,THREE.MathUtils.degToRad(78));
+  const finishDir=new THREE.Vector3(fh.x*.98,.08,fh.z*.98).normalize();
+  const finish={hand:impact.hand.clone().add(new THREE.Vector3(-.10,-.05,.20)),dir:finishDir};
+  return{start,impact,finish};
+}
+function mixPose(a,b,t){
+  const e=t*t*(3-2*t);
+  return{
+    hand:a.hand.clone().lerp(b.hand,e),
+    dir:a.dir.clone().lerp(b.dir,e).normalize()
+  };
+}
+function swingPoseAt(ms,sw){
+  if(ms<=sw.motionStart)return sw.bundle.start;
+  if(ms<=sw.impactAt){
+    const q=clamp((ms-sw.motionStart)/Math.max(1,sw.toImpactMs),0,1);
+    return mixPose(sw.bundle.start,sw.bundle.impact,q);
+  }
+  const q=clamp((ms-sw.impactAt)/Math.max(1,sw.followMs),0,1);
+  return mixPose(sw.bundle.impact,sw.bundle.finish,q);
+}
+function applyBatPose(pose){
+  worldBat.position.copy(pose.hand);
+  worldBat.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),pose.dir.clone().normalize());
+}
+function updateBat(now){
+  if(!S.visualSwing||ui.start.style.display!=='none'||now<S.visualSwing.motionStart||now>S.visualSwing.finishAt+45){
+    worldBat.visible=false;
+    if(S.visualSwing&&now>S.visualSwing.finishAt+45)S.visualSwing=null;
+    return;
+  }
+  worldBat.visible=true;
+  applyBatPose(swingPoseAt(now,S.visualSwing));
+}
+function updateCursorBarrel(){
+  const x=S.aimWorld.x,y=S.aimWorld.y;
+  let pos,axis;
+  if(dev.cursorPlane==='STRIKE'){
+    pos=new THREE.Vector3(x,y,PLATE_FRONT-.012);
+    const a=barrelAngle(x,y);
+    axis=new THREE.Vector3(-Math.cos(a),-Math.sin(a),0).normalize();
+  }else{
+    const pose=impactBatPose(x,y);
+    pos=pose.contact;axis=pose.dir;
+  }
+  cursorBarrel.position.copy(pos);
+  cursorBarrel.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),axis);
+  cursorBarrel.visible=ui.start.style.display==='none'&&!S.hitView&&!['swinging','posthit'].includes(S.phase);
+}
+function screenToAim(clientX,clientY){
+  const r=stage.getBoundingClientRect();
+  const ndc=new THREE.Vector2(((clientX-r.left)/r.width)*2-1,-(((clientY-r.top)/r.height)*2-1));
+  const ray=new THREE.Raycaster();ray.setFromCamera(ndc,camera);
+  let plane;
+  if(dev.cursorPlane==='STRIKE'){
+    plane=new THREE.Plane(new THREE.Vector3(0,0,1),-PLATE_FRONT);
+  }else{
+    const n=new THREE.Vector3(-IMPACT_SLOPE,0,1).normalize();
+    plane=new THREE.Plane(n,-n.z*PLATE_FRONT);
+  }
+  const hit=new THREE.Vector3();
+  if(!ray.ray.intersectPlane(plane,hit))return null;
+  hit.x=clamp(hit.x,-PLATE_HALF-REACH_X,PLATE_HALF+REACH_X);
+  hit.y=clamp(hit.y,ZONE_LOW-REACH_Y,ZONE_HIGH+REACH_Y);
+  hit.z=dev.cursorPlane==='STRIKE'?PLATE_FRONT:idealImpactZ(hit.x);
+  return hit;
+}
+function showPlateMarker(){
+  if(!S.pitch||S.markerShown)return;
+  plateCrossMarker.position.set(S.pitch.target.x,S.pitch.target.y,PLATE_FRONT-.006);
+  plateCrossMarker.visible=true;
+  S.markerShown=true;
+}
+function timingFactor(errorMs){
+  const a=Math.abs(errorMs);
+  if(a>=TIMING_MISS_MS)return 0;
+  return 1-Math.pow(a/TIMING_MISS_MS,1.45);
+}
+function closestOnSegment(p,a,b){
+  const ab=b.clone().sub(a);
+  const t=clamp(p.clone().sub(a).dot(ab)/Math.max(1e-9,ab.lengthSq()),0,1);
+  const q=a.clone().addScaledVector(ab,t);
+  return{point:q,t,distance:q.distanceTo(p)};
+}
+function sweetSegment(pose){
+  return{
+    a:pose.hand.clone().addScaledVector(pose.dir,SWEET_START),
+    b:pose.hand.clone().addScaledVector(pose.dir,SWEET_END)
+  };
+}
+function pointOnSweet(pose,t){
+  const seg=sweetSegment(pose);
+  return seg.a.clone().lerp(seg.b,t);
+}
+function ballAtMs(ms){
+  return pitchPosition((ms-S.t0)/FLIGHT_MS[S.pitch.type]);
+}
+function ballVelocityAt(ms){
+  const dt=1.5;
+  const a=ballAtMs(ms-dt),b=ballAtMs(ms+dt);
+  return b.sub(a).multiplyScalar(1000/(dt*2));
+}
+function batVelocityAt(ms,sw,fraction){
+  const dt=2;
+  const p1=pointOnSweet(swingPoseAt(ms,sw),fraction);
+  const p2=pointOnSweet(swingPoseAt(ms+dt,sw),fraction);
+  const raw=p2.sub(p1).multiplyScalar(1000/dt);
+  const len=raw.length();
+  if(len<1e-5)return new THREE.Vector3(0,0,0);
+  const effective=clamp(len,0,45);
+  return raw.multiplyScalar(effective/len);
+}
+function idealImpactTimeMs(){
+  return S.t0+idealImpactU(S.pitch)*FLIGHT_MS[S.pitch.type];
+}
+function physicalExitVelocity(ms,sw,ballPos,near){
+  const pose=swingPoseAt(ms,sw);
+  const vIn=ballVelocityAt(ms);
+  const vBat=batVelocityAt(ms,sw,near.t);
+  let n=ballPos.clone().sub(near.point);
+  if(n.length()<1e-4){
+    const rel=vIn.clone().sub(vBat);
+    n=rel.clone().sub(pose.dir.clone().multiplyScalar(rel.dot(pose.dir)));
+    if(n.length()<1e-4)n=new THREE.Vector3(0,1,0);
+  }
+  n.normalize();
+  const rel=vIn.clone().sub(vBat);
+  if(rel.dot(n)>0)n.negate();
+  const vn=rel.dot(n);
+  const restitution=.52;
+  let out=vIn.clone().addScaledVector(n,-(1+restitution)*vn);
+  const tangentBat=vBat.clone().sub(n.clone().multiplyScalar(vBat.dot(n)));
+  out.addScaledVector(tangentBat,.15);
+
+  const timingError=ms-idealImpactTimeMs();
+  const tf=timingFactor(timingError);
+  const loc=locationCap(S.pitch.target);
+  const sweet=.84+.16*(1-Math.min(1,Math.abs(near.t-.55)/.55));
+  const power=tf*loc.cap*sweet;
+
+  const verticalOffset=ballPos.y-near.point.y;
+  const sprayDeg=clamp((ballPos.z-PLATE_FRONT)*78,-40,40);
+  const launchDeg=clamp(12+(verticalOffset/COLLISION_RADIUS)*26,-16,44);
+  const spray=THREE.MathUtils.degToRad(sprayDeg),launch=THREE.MathUtils.degToRad(launchDeg);
+  const desired=new THREE.Vector3(
+    Math.sin(spray)*Math.cos(launch),
+    Math.sin(launch),
+    Math.cos(spray)*Math.cos(launch)
+  ).normalize();
+
+  if(!Number.isFinite(out.length())||out.length()<1||out.z<1){
+    out.copy(desired);
+  }else{
+    out.normalize().multiplyScalar(.62).addScaledVector(desired,.38).normalize();
+  }
+  const speed=20+30*power;
+  out.multiplyScalar(speed);
+  return{out,vIn,vBat,power,tf,loc,sweet,timingError,verticalOffset,sprayDeg,launchDeg};
+}
+function setBattedTrail(points){
+  battedTrail.geometry.dispose();
+  battedTrail.geometry=new THREE.BufferGeometry().setFromPoints(points);
+}
+function setIncomingImpactTrail(ms){
+  const pts=[];
+  const start=Math.max(S.t0,ms-170);
+  for(let t=start;t<ms;t+=12)pts.push(ballAtMs(t));
+  pts.push(ballAtMs(ms));
+  incomingImpactTrail.geometry.dispose();
+  incomingImpactTrail.geometry=new THREE.BufferGeometry().setFromPoints(pts);
+  incomingImpactTrail.visible=true;
+}
+function beginPhysicalBattedBall(ms,ballPos,near,physics){
+  const surfaceContact=near.point.clone().lerp(ballPos,.5);
+  contactMarker.position.copy(surfaceContact);contactMarker.visible=true;
+  S.contactMarkerUntil=Infinity;
+
+  setIncomingImpactTrail(ms);
+  S.batted={
+    t0:ms,start:ballPos.clone(),velocity:physics.out.clone(),power:physics.power,
+    sprayDeg:THREE.MathUtils.radToDeg(Math.atan2(physics.out.x,physics.out.z)),
+    launchDeg:THREE.MathUtils.radToDeg(Math.atan2(physics.out.y,Math.hypot(physics.out.x,physics.out.z))),
+    points:[ballPos.clone()]
+  };
+  battedBall.position.copy(ballPos);battedBall.visible=true;
+  setBattedTrail(S.batted.points);battedTrail.visible=true;
+  ball.visible=false;for(const t of trail)t.visible=false;
+  S.phase='posthit';S.locked=true;S.swing=null;S.nextDue=Infinity;
+  S.hitView={
+    start:ms,
+    turnEnd:ms+110,
+    holdUntil:ms+HIT_VIEW_HOLD_MS,
+    returnUntil:ms+HIT_VIEW_HOLD_MS+HIT_VIEW_RETURN_MS
+  };
+  showPlateMarker();
+
+  const award=registerHit(physics,S.batted);
+  ui.contact.style.width=Math.round(physics.tf*100)+'%';
+  ui.power.style.width=Math.round(physics.loc.cap*100)+'%';
+  const batSpeed=physics.vBat.length();
+  const exitSpeed=physics.out.length();
+  ui.result.innerHTML='HIT<small>+'+award.gained+' PTS'+award.label+' · POWER '+Math.round(physics.power*100)+'%</small>';
+  ui.result.classList.add('on');setTimeout(()=>ui.result.classList.remove('on'),1050);
+  impactStatus.textContent='CONTACT x '+ballPos.x.toFixed(2)+' / y '+ballPos.y.toFixed(2)+' / z '+ballPos.z.toFixed(2)+' · bat '+batSpeed.toFixed(1)+'m/s · spray '+Math.round(S.batted.sprayDeg)+'° · launch '+Math.round(S.batted.launchDeg)+'°';
+}
+function scanSwingCollision(now){
+  const sw=S.swing;
+  if(!sw||!S.pitch)return false;
+  const end=Math.min(now,sw.finishAt);
+  let from=Math.max(sw.lastCheck,sw.motionStart);
+  if(end<from)return false;
+  const step=3;
+  for(let ms=from;ms<=end+.01;ms+=step){
+    const pose=swingPoseAt(ms,sw);
+    const seg=sweetSegment(pose);
+    const bp=ballAtMs(ms);
+    const near=closestOnSegment(bp,seg.a,seg.b);
+    const timingError=ms-idealImpactTimeMs();
+    if(near.distance<sw.closestDist){
+      sw.closestDist=near.distance;sw.closestTime=ms;sw.closestTiming=timingError;
+    }
+    if(near.distance<=COLLISION_RADIUS&&Math.abs(timingError)<TIMING_MISS_MS&&locationCap(S.pitch.target).reachable){
+      const physics=physicalExitVelocity(ms,sw,bp,near);
+      beginPhysicalBattedBall(ms,bp,near,physics);
+      return true;
+    }
+  }
+  sw.lastCheck=end;
+  return false;
+}
+function finishSwingMiss(){
+  if(!S.swing)return;
+  const sw=S.swing;
+  const timing=Math.round(sw.closestTiming??(performance.now()-idealImpactTimeMs()));
+  const dist=Number.isFinite(sw.closestDist)?Math.round(sw.closestDist*1000):999;
+  ui.result.innerHTML='MISS<small>closest '+dist+'mm · timing Δ '+timing+'ms</small>';
+  ui.result.classList.add('on');setTimeout(()=>ui.result.classList.remove('on'),900);
+  impactStatus.textContent='NO CONTACT · closest '+dist+'mm · timing Δ '+timing+'ms';
+  registerFailure('MISS');
+  S.swing=null;S.phase='missed';S.locked=true;
+}
+function swing(now){
+  if(S.phase!=='pitching'||S.locked||S.swing)return;
+  const bundle=swingPoseBundle(S.aimWorld.x,S.aimWorld.y);
+  const speed=clamp(Number(dev.swingSpeed)||2,1,4);
+  const delay=Math.max(0,Number(dev.swingDelay)||0);
+  const motionStart=now+delay;
+  const toImpactMs=BASE_TO_CONTACT_MS/speed;
+  const impactAt=motionStart+toImpactMs;
+  const followMs=BASE_FOLLOW_THROUGH_MS/speed;
+  const finishAt=impactAt+followMs;
+  const sw={
+    start:now,delay,speed,motionStart,toImpactMs,impactAt,followMs,finishAt,
+    bundle,lastCheck:motionStart,closestDist:Infinity,closestTime:now,closestTiming:0
+  };
+  S.swing=sw;S.visualSwing={...sw};
+  S.phase='swinging';S.locked=true;
+}
+
+canvas.addEventListener('pointerdown',e=>{
+  const overlayCalOpen=ui.cal.classList.contains('open')&&window.innerWidth<1200;
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  if(ui.start.style.display!=='none'||S.input||overlayCalOpen||S.phase==='posthit'||S.phase==='swinging'||S.phase==='missed')return;
+  e.preventDefault();
+  const hit=screenToAim(e.clientX,e.clientY);if(hit)S.aimWorld.copy(hit);
+  S.input={id:e.pointerId,down:performance.now()};
+  canvas.setPointerCapture?.(e.pointerId)
+},{passive:false});
+canvas.addEventListener('pointermove',e=>{
+  const hit=screenToAim(e.clientX,e.clientY);
+  if(!hit)return;
+  if(S.input&&e.pointerId===S.input.id){e.preventDefault();S.aimWorld.copy(hit);return}
+  if(e.pointerType==='mouse'&&ui.start.style.display==='none'&&!['posthit','swinging','missed'].includes(S.phase))S.aimWorld.copy(hit);
+},{passive:false});
+canvas.addEventListener('pointerup',e=>{
+  if(!S.input||e.pointerId!==S.input.id)return;
+  e.preventDefault();
+  // Releasing before a pitch only sets the cursor position. During a pitch it starts the swing.
+  if(S.phase==='pitching')swing(performance.now());
+  S.input=null
+},{passive:false});
+canvas.addEventListener('pointercancel',e=>{if(!S.input||e.pointerId!==S.input.id)return;S.input=null},{passive:false});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+document.getElementById('calBtn').onclick=()=>ui.cal.classList.toggle('open');
+document.getElementById('closeCal').onclick=()=>ui.cal.classList.remove('open');
+document.getElementById('resetCam').onclick=()=>{for(const id of controlsIds)ctl[id].value=cfgDefaults[id];applyCamera()};
+pitchMode.onchange=()=>{dev.pitchMode=pitchMode.value;saveDev();syncDevUI()};
+courseMode.onchange=()=>{dev.courseMode=courseMode.value;saveDev();syncDevUI()};
+cursorPlane.onchange=()=>{dev.cursorPlane=cursorPlane.value;saveDev();syncDevUI()};
+swingDelay.oninput=()=>{dev.swingDelay=Number(swingDelay.value);saveDev();syncDevUI()};
+swingSpeed.oninput=()=>{dev.swingSpeed=Number(swingSpeed.value);saveDev();syncDevUI()};
+autoBtn.onclick=()=>{
+  dev.auto=!dev.auto;saveDev();syncDevUI();
+  if(dev.auto&&S.phase==='waiting'&&ui.start.style.display==='none')armNextPitch(performance.now());
+  if(!dev.auto)S.nextDue=Infinity;
+};
+document.getElementById('throwNow').onclick=()=>{
+  if(ui.start.style.display!=='none'||['swinging','posthit'].includes(S.phase))return;
+  nextPitch(performance.now());
+};
+document.getElementById('startBtn').onclick=begin;
+document.getElementById('retryBtn').onclick=begin;
+renderModeUI();
+
+function resize(){
+  const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()
+}
+new ResizeObserver(resize).observe(stage);resize();
+
+function animate(now){
+  requestAnimationFrame(animate);
+
+  if(dev.auto&&ui.start.style.display==='none'&&S.phase==='waiting'&&now>=S.nextDue)nextPitch(now);
+
+  if(['pitching','swinging','missed'].includes(S.phase)){
+    const u=(now-S.t0)/FLIGHT_MS[S.pitch.type];
+    ball.position.copy(pitchPosition(u));
+    ball.visible=u<=1.10;
+    for(let i=0;i<trail.length;i++){
+      const tu=u-(i+1)*.026;
+      trail[i].position.copy(pitchPosition(Math.max(0,tu)));
+      trail[i].visible=u<1.08;
+    }
+    if(u>=1)showPlateMarker();
+
+    if(S.phase==='swinging'&&S.swing){
+      scanSwingCollision(now);
+      if(S.phase==='swinging'&&now>S.swing.finishAt&&u>1.02)finishSwingMiss();
+    }
+
+    if(u>1.10&&S.phase!=='posthit'){
+      const hadSwing=S.phase==='missed'||S.phase==='swinging';
+      if(S.phase==='swinging'&&S.swing)finishSwingMiss();
+      ball.visible=false;for(const t of trail)t.visible=false;showPlateMarker();
+
+      if(!hadSwing&&S.phase==='pitching'){
+        registerFailure('TAKE');
+        ui.result.innerHTML='TAKE<small>0 PTS</small>';
+        ui.result.classList.add('on');
+        setTimeout(()=>ui.result.classList.remove('on'),650);
+      }
+      if(S.phase!=='posthit')enterWaiting(now);
+    }
+  }else{
+    ball.visible=false;for(const t of trail)t.visible=false;
+  }
+
+  // Batted-ball flight is independent from input readiness.
+  if(S.batted){
+    const t=(now-S.batted.t0)/1000;
+    const v=S.batted.velocity;
+    battedBall.position.set(
+      S.batted.start.x+v.x*t,
+      S.batted.start.y+v.y*t-4.9*t*t,
+      S.batted.start.z+v.z*t
+    );
+    battedBall.visible=true;
+    const pts=S.batted.points;
+    if(!pts.length||pts[pts.length-1].distanceTo(battedBall.position)>.16){
+      pts.push(battedBall.position.clone());
+      if(pts.length>80)pts.shift();
+      setBattedTrail(pts);
+    }
+    if((t>.18&&battedBall.position.y<=.04)||t>2.5){
+      battedBall.visible=false;S.batted=null;
+    }
+  }else{
+    battedBall.visible=false;
+  }
+
+  updateCameraView(now);
+  updateCursorBarrel();
+  updateBat(now);
+
+  if(S.pitch){
+    const loc=locationCap(S.pitch.target);
+    ui.power.style.width=Math.round(loc.cap*100)+'%';
+  }else{
+    ui.power.style.width='100%';
+  }
+
+  const counting=dev.auto&&ui.start.style.display==='none'&&S.phase==='waiting'&&Number.isFinite(S.nextDue);
+  const remain=counting?Math.max(0,S.nextDue-now):0;
+  const phaseText=S.phase==='posthit'?'HIT VIEW → batting view':S.phase.toUpperCase();
+  devStatus.textContent=dev.auto
+    ?'AUTO: '+phaseText+(counting?' / next '+(remain/1000).toFixed(1)+'s':'')+' / '+dev.pitchMode+' / '+dev.courseMode+' / '+dev.cursorPlane+' / delay '+dev.swingDelay+'ms / speed '+Number(dev.swingSpeed).toFixed(2)+'x'
+    :'AUTO停止中 / THROW NOWで1球 / '+dev.pitchMode+' / '+dev.courseMode+' / '+dev.cursorPlane+' / delay '+dev.swingDelay+'ms / speed '+Number(dev.swingSpeed).toFixed(2)+'x';
+
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
