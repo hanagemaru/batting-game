@@ -61,7 +61,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 <div class="app">
 <header>
   <div><div class="hlabel">PITCH</div><div class="hvalue"><span id="pitchNo">0</span><span id="pitchLimit" style="font-size:10px;color:#71808d"> / 10</span></div></div>
-  <div class="center"><div id="modeTitle" class="title">BATTER'S READ</div><div id="pitchInfo" class="pitchname">FAST</div></div>
+  <div class="center"><div id="modeTitle" class="title">BATTER'S READ</div><div id="pitchInfo" class="pitchname">READY</div></div>
   <div class="right"><div class="hlabel">SCORE</div><div id="score" class="hvalue">0000</div></div>
 </header>
 
@@ -231,6 +231,9 @@ function sessionShouldEnd(){
 function endSession(){
   if(session.ended)return;
   session.ended=true;S.phase='ended';S.locked=true;S.nextDue=Infinity;
+  targetFieldMarker.visible=false;
+  document.getElementById('targetStatus').style.display='none';
+  document.getElementById('pitchInfo').textContent='SESSION COMPLETE';
   const best=saveBest();
   document.getElementById('endTitle').textContent=rule.title;
   document.getElementById('endScore').textContent=session.score+' PTS';
@@ -253,6 +256,7 @@ function registerHit(physics,batted){
   if(rule.key==='target'){
     const ok=sprayMatchesTarget(batted.sprayDeg,session.currentTarget);
     if(ok){gained+=100;session.targetHits++;label=' · TARGET +100'}
+    else label=' · TARGET MISS';
   }else if(rule.key==='survival'){
     session.combo++;session.bestCombo=Math.max(session.bestCombo,session.combo);
     const mult=Math.min(2.5,1+(session.combo-1)*.15);
@@ -548,7 +552,7 @@ function nextPitch(now=performance.now()){
   updateSessionHud();S.swing=null;S.visualSwing=null;S.batted=null;S.markerShown=false;S.phase='pitching';
   ball.visible=true;battedBall.visible=false;incomingImpactTrail.visible=false;battedTrail.visible=false;plateCrossMarker.visible=false;contactMarker.visible=false;for(const t of trail)t.visible=true;
   ui.pitchNo.textContent=S.n;
-  ui.pitchInfo.textContent=S.pitch.type+' · '+S.pitch.course+' · '+FLIGHT_MS[S.pitch.type]+'ms';
+  ui.pitchInfo.textContent='PITCH '+S.n;
   ui.result.classList.remove('on');ui.result.textContent='';
   impactStatus.textContent='CONTACT: —';
 }
@@ -1011,6 +1015,9 @@ function animate(now){
 
   const counting=dev.auto&&ui.start.style.display==='none'&&S.phase==='waiting'&&Number.isFinite(S.nextDue);
   const remain=counting?Math.max(0,S.nextDue-now):0;
+  if(session.ended)ui.pitchInfo.textContent='SESSION COMPLETE';
+  else if(S.phase==='posthit')ui.pitchInfo.textContent='TRACKING HIT';
+  else if(counting)ui.pitchInfo.textContent='NEXT '+(remain/1000).toFixed(1)+'s';
   const phaseText=S.phase==='posthit'?'HIT VIEW → batting view':S.phase.toUpperCase();
   devStatus.textContent=dev.auto
     ?'AUTO: '+phaseText+(counting?' / next '+(remain/1000).toFixed(1)+'s':'')+' / '+dev.pitchMode+' / '+dev.courseMode+' / '+dev.cursorPlane+' / delay '+dev.swingDelay+'ms / speed '+Number(dev.swingSpeed).toFixed(2)+'x'
