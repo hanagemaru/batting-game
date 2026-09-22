@@ -46,7 +46,8 @@ h1{font-size:36px;line-height:1;margin:10px 0 8px}p{color:var(--muted);font:14px
 <div class="note">将来の広告はプレイ中ではなく、基本的にリザルト後・モード選択画面へ置く想定。Survivalの任意コンティニュー広告を入れる場合は、ランキング対象外の継続プレイとして分離する。</div>
 <script>
 for(const el of document.querySelectorAll('[data-best]')){
-  const v=Number(localStorage.getItem('batting-best-'+el.dataset.best)||0);
+  let v=0;
+  try{v=Number(localStorage.getItem('batting-best-'+el.dataset.best)||0)||0}catch(e){}
   el.textContent=v||'—';
 }
 </script>
