@@ -206,7 +206,7 @@ function renderModeUI(){
 function updateSessionHud(){
   const el=document.getElementById('modeStatus'),target=document.getElementById('targetStatus');
   if(rule.key==='survival')el.textContent='OUT '+session.outs+'/3 · COMBO '+session.combo;
-  else if(rule.key==='target')el.textContent='HIT '+session.targetHits+' · '+session.score+' PTS';
+  else if(rule.key==='target')el.textContent='TARGET '+session.targetHits+'/'+rule.limit+' · '+session.score+' PTS';
   else el.textContent='HIT '+session.hits+' · '+session.score+' PTS';
   if(rule.key==='target'&&session.currentTarget){
     target.style.display='block';target.textContent='TARGET '+TARGET_LABEL[session.currentTarget];
@@ -509,7 +509,9 @@ function armNextPitch(now){
 function enterWaiting(now){
   S.phase='waiting';S.locked=false;S.swing=null;
   if(sessionShouldEnd()){
-    if(S.batted){S.pendingEnd=true;S.nextDue=Infinity;return}
+    if(S.batted){
+      S.pendingEnd=true;S.phase='ending';S.locked=true;S.nextDue=Infinity;return
+    }
     endSession();return
   }
   armNextPitch(now);
@@ -701,7 +703,7 @@ function updateCursorBarrel(){
   }
   cursorBarrel.position.copy(pos);
   cursorBarrel.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),axis);
-  cursorBarrel.visible=ui.start.style.display==='none'&&!S.hitView&&!['swinging','posthit'].includes(S.phase);
+  cursorBarrel.visible=ui.start.style.display==='none'&&!S.hitView&&!['swinging','posthit','ending','ended'].includes(S.phase);
 }
 function screenToAim(clientX,clientY){
   const r=stage.getBoundingClientRect();
@@ -916,7 +918,7 @@ function swing(now){
 canvas.addEventListener('pointerdown',e=>{
   const overlayCalOpen=ui.cal.classList.contains('open')&&window.innerWidth<1200;
   if(e.pointerType==='mouse'&&e.button!==0)return;
-  if(ui.start.style.display!=='none'||S.input||overlayCalOpen||S.phase==='posthit'||S.phase==='swinging'||S.phase==='missed')return;
+  if(ui.start.style.display!=='none'||S.input||overlayCalOpen||['posthit','swinging','missed','ending','ended'].includes(S.phase))return;
   e.preventDefault();
   const hit=screenToAim(e.clientX,e.clientY);if(hit)S.aimWorld.copy(hit);
   S.input={id:e.pointerId,down:performance.now()};
@@ -926,7 +928,7 @@ canvas.addEventListener('pointermove',e=>{
   const hit=screenToAim(e.clientX,e.clientY);
   if(!hit)return;
   if(S.input&&e.pointerId===S.input.id){e.preventDefault();S.aimWorld.copy(hit);return}
-  if(e.pointerType==='mouse'&&ui.start.style.display==='none'&&!['posthit','swinging','missed'].includes(S.phase))S.aimWorld.copy(hit);
+  if(e.pointerType==='mouse'&&ui.start.style.display==='none'&&!['posthit','swinging','missed','ending','ended'].includes(S.phase))S.aimWorld.copy(hit);
 },{passive:false});
 canvas.addEventListener('pointerup',e=>{
   if(!S.input||e.pointerId!==S.input.id)return;
@@ -1041,6 +1043,7 @@ function animate(now){
   const remain=counting?Math.max(0,S.nextDue-now):0;
   if(session.ended)ui.pitchInfo.textContent='SESSION COMPLETE';
   else if(S.phase==='posthit')ui.pitchInfo.textContent='TRACKING HIT';
+  else if(S.phase==='ending')ui.pitchInfo.textContent='FINAL HIT';
   else if(counting)ui.pitchInfo.textContent='NEXT '+(remain/1000).toFixed(1)+'s';
   const phaseText=S.phase==='posthit'?'HIT VIEW → batting view':S.phase.toUpperCase();
   devStatus.textContent=dev.auto
