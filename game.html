@@ -146,6 +146,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
       <div id="startEyebrow" class="eyebrow">BATTER'S READ</div>
       <h1 id="startTitle">10球 SCORE ATTACK</h1>
       <p id="startCopy">10球で合計スコアを伸ばす。</p>
+      <p id="controlCopy" style="margin-top:9px;color:#8193a0;font-size:10px">投球前にカーソルを合わせる → 投球中にドラッグで修正 → 離してスイング</p>
       <button id="startBtn">START</button>
     </div>
   </div>
@@ -185,6 +186,7 @@ const RULES={
 };
 const rule=RULES[MODE]||RULES.score;
 const targetCycle=['PULL','CENTER','OPPOSITE'];
+const TARGET_LABEL={PULL:'引っ張り',CENTER:'センター',OPPOSITE:'逆方向'};
 let session={score:0,hits:0,misses:0,outs:0,combo:0,bestCombo:0,targetHits:0,ended:false,currentTarget:null};
 
 function targetForPitch(n){return targetCycle[(n-1)%targetCycle.length]}
@@ -207,7 +209,7 @@ function updateSessionHud(){
   else if(rule.key==='target')el.textContent='HIT '+session.targetHits+' · '+session.score+' PTS';
   else el.textContent='HIT '+session.hits+' · '+session.score+' PTS';
   if(rule.key==='target'&&session.currentTarget){
-    target.style.display='block';target.textContent='TARGET '+session.currentTarget;
+    target.style.display='block';target.textContent='TARGET '+TARGET_LABEL[session.currentTarget];
     targetFieldMarker.visible=true;
     if(session.currentTarget==='PULL')targetFieldMarker.position.set(4,.04,11.5);
     else if(session.currentTarget==='OPPOSITE')targetFieldMarker.position.set(-4,.04,11.5);
@@ -238,10 +240,10 @@ function endSession(){
   document.getElementById('endTitle').textContent=rule.title;
   document.getElementById('endScore').textContent=session.score+' PTS';
   const detail=rule.key==='survival'
-    ?'HITS '+session.hits+' · BEST COMBO '+session.bestCombo+' · BEST SCORE '+best
+    ?'PITCHES '+S.n+' · HITS '+session.hits+' · BEST COMBO '+session.bestCombo+' · BEST '+best
     :rule.key==='target'
-      ?'TARGET '+session.targetHits+'/'+rule.limit+' · HITS '+session.hits+' · BEST '+best
-      :'HITS '+session.hits+'/'+rule.limit+' · BEST '+best;
+      ?'TARGET '+session.targetHits+'/'+rule.limit+' · HITS '+session.hits+' · MISS '+session.misses+' · BEST '+best
+      :'HITS '+session.hits+'/'+rule.limit+' · MISS '+session.misses+' · BEST '+best;
   document.getElementById('endMeta').textContent=detail;
   document.getElementById('sessionEnd').classList.add('on');
   // Future ad/analytics integration point. No ad is shown in the prototype.
@@ -562,8 +564,8 @@ function nextPitch(now=performance.now()){
 function begin(){
   resetSession();
   S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null,pendingEnd:false};
-  ui.score.textContent='0000';ui.pitchNo.textContent='0';ui.start.style.display='none';
-  nextPitch(performance.now()+250)
+  ui.score.textContent='0000';ui.pitchNo.textContent='0';ui.pitchInfo.textContent='READY';ui.start.style.display='none';
+  enterWaiting(performance.now())
 }
 
 function pitchPosition(u){
