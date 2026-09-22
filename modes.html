@@ -29,19 +29,25 @@ h1{font-size:36px;line-height:1;margin:10px 0 8px}p{color:var(--muted);font:14px
 <a class="card" href="./game.html?mode=score">
   <div class="num">MODE 01</div><h2>10球 SCORE ATTACK</h2>
   <p>10球で合計点を競う短時間モード。強いコンタクトを安定して積み上げる。</p>
-  <div class="meta"><span class="pill">10 PITCHES</span><span class="pill">BEST SCORE</span><span class="pill">約30秒</span></div>
+  <div class="meta"><span class="pill">10 PITCHES</span><span class="pill">BEST <b data-best="score">—</b></span><span class="pill">約30秒</span></div>
 </a>
 <a class="card" href="./game.html?mode=target">
   <div class="num">MODE 02</div><h2>TARGET CHALLENGE</h2>
   <p>指定された打球方向へ打ち分ける。引っ張り・センター・逆方向を順番に狙う。</p>
-  <div class="meta"><span class="pill">12 PITCHES</span><span class="pill">DIRECTION BONUS</span><span class="pill">技術型</span></div>
+  <div class="meta"><span class="pill">12 PITCHES</span><span class="pill">BEST <b data-best="target">—</b></span><span class="pill">DIRECTION BONUS</span></div>
 </a>
 <a class="card" href="./game.html?mode=survival">
   <div class="num">MODE 03</div><h2>3 OUT SURVIVAL</h2>
   <p>ミス3回で終了。連続ヒットでコンボ倍率が伸びるエンドレス型。</p>
-  <div class="meta"><span class="pill">ENDLESS</span><span class="pill">3 OUTS</span><span class="pill">COMBO</span></div>
+  <div class="meta"><span class="pill">ENDLESS</span><span class="pill">BEST <b data-best="survival">—</b></span><span class="pill">3 OUTS / COMBO</span></div>
 </a>
 </div>
 <div class="dev">調整用：<a href="./playtest-impact.html">3D IMPACT PLAYTEST</a></div>
 <div class="note">将来の広告はプレイ中ではなく、基本的にリザルト後・モード選択画面へ置く想定。Survivalの任意コンティニュー広告を入れる場合は、ランキング対象外の継続プレイとして分離する。</div>
+<script>
+for(const el of document.querySelectorAll('[data-best]')){
+  const v=Number(localStorage.getItem('batting-best-'+el.dataset.best)||0);
+  el.textContent=v||'—';
+}
+</script>
 </main></body></html>
