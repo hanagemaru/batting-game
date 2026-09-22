@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#081017">
+<title>BATTER'S READ — Modes</title>
+<style>
+:root{color-scheme:dark;--bg:#071017;--card:#101a23;--line:#31414f;--text:#eef4f7;--muted:#8fa0ad;--accent:#f4d15d}
+*{box-sizing:border-box}
+body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% 10%,#173040,#071017 55%);color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+main{width:min(100%,780px);margin:auto;padding:40px 18px 64px}
+.eyebrow{font-size:10px;letter-spacing:.18em;color:var(--accent);font-weight:900}
+h1{font-size:36px;line-height:1;margin:10px 0 8px}p{color:var(--muted);font:14px/1.7 system-ui,sans-serif;margin:0 0 26px}
+.grid{display:grid;gap:12px}
+.card{display:block;text-decoration:none;color:inherit;border:1px solid var(--line);background:linear-gradient(145deg,#14222d,#0b131a);padding:18px;box-shadow:6px 6px 0 #020405;transition:.12s transform}
+.card:hover{transform:translateY(-2px)}
+.num{font-size:10px;color:#748795}.card h2{font-size:20px;margin:7px 0 7px}.card p{font-size:12px;margin:0}.meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.pill{border:1px solid #354756;color:#aebbc5;padding:5px 7px;font-size:8px}
+.dev{margin-top:22px;padding-top:17px;border-top:1px solid #25333e;font-size:10px}.dev a{color:#9fdcc1}
+.note{margin-top:24px;color:#617481;font:11px/1.65 system-ui,sans-serif}
+@media(min-width:680px){.grid{grid-template-columns:repeat(3,1fr)}h1{font-size:44px}}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">BATTER'S READ / MODE LAB</div>
+<h1>HOW TO PLAY</h1>
+<p>同じ3D打撃を、違うルールで遊び比べるための試作です。今はランキング・広告なし。</p>
+<div class="grid">
+<a class="card" href="./game.html?mode=score">
+  <div class="num">MODE 01</div><h2>10球 SCORE ATTACK</h2>
+  <p>10球で合計点を競う短時間モード。強いコンタクトを安定して積み上げる。</p>
+  <div class="meta"><span class="pill">10 PITCHES</span><span class="pill">BEST SCORE</span><span class="pill">約30秒</span></div>
+</a>
+<a class="card" href="./game.html?mode=target">
+  <div class="num">MODE 02</div><h2>TARGET CHALLENGE</h2>
+  <p>指定された打球方向へ打ち分ける。引っ張り・センター・逆方向を順番に狙う。</p>
+  <div class="meta"><span class="pill">12 PITCHES</span><span class="pill">DIRECTION BONUS</span><span class="pill">技術型</span></div>
+</a>
+<a class="card" href="./game.html?mode=survival">
+  <div class="num">MODE 03</div><h2>3 OUT SURVIVAL</h2>
+  <p>ミス3回で終了。連続ヒットでコンボ倍率が伸びるエンドレス型。</p>
+  <div class="meta"><span class="pill">ENDLESS</span><span class="pill">3 OUTS</span><span class="pill">COMBO</span></div>
+</a>
+</div>
+<div class="dev">調整用：<a href="./playtest-impact.html">3D IMPACT PLAYTEST</a></div>
+<div class="note">将来の広告はプレイ中ではなく、基本的にリザルト後・モード選択画面へ置く想定。Survivalの任意コンティニュー広告を入れる場合は、ランキング対象外の継続プレイとして分離する。</div>
+</main></body></html>
