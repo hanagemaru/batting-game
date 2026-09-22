@@ -108,3 +108,13 @@ Current `playtest-impact.html` now tests the following alternatives:
 - The outgoing ball begins at the exact incoming-ball center at the detected collision time.
 - A retained incoming trail and outgoing trail meet at the contact point so trajectory discontinuities are visible during debugging.
 - A contact marker and numeric contact readout expose the computed x/y/z, bat speed, launch and spray for calibration.
+
+
+### Impact prototype refinements
+
+- Adult bat geometry now uses a 34 in (0.864 m) model with realistic handle/barrel proportions rather than making the bat unrealistically long.
+- Bat/hands are hidden at rest and only enter the frame after the swing starts.
+- Swing delay and swing speed are independently adjustable; default speed is 2.0x for current feel testing.
+- A hit temporarily turns the camera toward the pitcher/outfield direction, then returns to the calibrated batting view.
+- The 3-second auto-pitch countdown starts only after the batting view has returned and player input is available again.
+- Batted-ball flight continues independently while the player becomes ready for the next pitch.
