@@ -9,24 +9,27 @@
 :root{color-scheme:dark;--bg:#071017;--card:#101a23;--line:#31414f;--text:#eef4f7;--muted:#8fa0ad;--accent:#f4d15d}
 *{box-sizing:border-box}
 body{margin:0;min-height:100dvh;background:radial-gradient(circle at 50% 10%,#173040,#071017 55%);color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-main{width:min(100%,780px);margin:auto;padding:40px 18px 64px}
+main{width:min(100%,780px);margin:auto;padding:40px 18px max(64px,env(safe-area-inset-bottom))}
 .eyebrow{font-size:10px;letter-spacing:.18em;color:var(--accent);font-weight:900}
 h1{font-size:36px;line-height:1;margin:10px 0 8px}p{color:var(--muted);font:14px/1.7 system-ui,sans-serif;margin:0 0 26px}
 .grid{display:grid;gap:12px}
-.card{display:block;text-decoration:none;color:inherit;border:1px solid var(--line);background:linear-gradient(145deg,#14222d,#0b131a);padding:18px;box-shadow:6px 6px 0 #020405;transition:.12s transform,.12s border-color;touch-action:manipulation}
-.card:hover,.card:focus-visible{transform:translateY(-2px);border-color:#607688;outline:none}
-.num{font-size:10px;color:#748795}.card h2{font-size:20px;margin:7px 0 7px}.card p{font-size:12px;margin:0}.meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.pill{border:1px solid #354756;color:#aebbc5;padding:5px 7px;font-size:8px}.best{color:var(--accent)}
-.dev{margin-top:22px;padding-top:17px;border-top:1px solid #25333e;font-size:10px}.dev a{color:#9fdcc1}
-.note{margin-top:24px;color:#617481;font:11px/1.65 system-ui,sans-serif}
+.card{position:relative;display:block;text-decoration:none;color:inherit;border:1px solid var(--line);background:linear-gradient(145deg,#14222d,#0b131a);padding:18px;box-shadow:6px 6px 0 #020405;transition:.12s transform,.12s border-color;touch-action:manipulation;min-height:188px}
+.card:hover,.card:focus-visible{transform:translateY(-2px);border-color:#607688;outline:2px solid transparent}.card.recommended{border-color:#746629}
+.recommend{position:absolute;right:12px;top:12px;color:#17140a;background:var(--accent);padding:4px 6px;font-size:7px;font-weight:1000;letter-spacing:.08em}
+.num{font-size:10px;color:#748795}.card h2{font-size:20px;margin:7px 0 7px;padding-right:58px}.card p{font-size:12px;margin:0}.meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.pill{border:1px solid #354756;color:#aebbc5;padding:5px 7px;font-size:8px}.best{color:var(--accent)}
+.footer{margin-top:24px;padding-top:17px;border-top:1px solid #25333e;display:flex;justify-content:space-between;gap:12px;align-items:center;color:#617481;font:10px/1.5 system-ui,sans-serif}.footer a{color:#8099aa;text-decoration:none}.footer a:focus-visible{outline:1px solid #8099aa}
+.adSlot{display:none}
 @media(min-width:680px){.grid{grid-template-columns:repeat(3,1fr)}h1{font-size:44px}}
+@media(max-width:360px){main{padding-left:12px;padding-right:12px}.card{padding:15px}h1{font-size:32px}}
 </style>
 </head>
 <body><main>
-<div class="eyebrow">BATTER'S READ / MODE LAB</div>
-<h1>HOW TO PLAY</h1>
-<p>同じ3D打撃を、違うルールで遊び比べるための試作です。今はランキング・広告なし。</p>
-<div class="grid">
-<a class="card" href="./game.html?mode=score">
+<div class="eyebrow">BATTER'S READ</div>
+<h1>SELECT MODE</h1>
+<p>狙いを合わせ、投球を見て、離してスイング。</p>
+<div class="grid" aria-label="ゲームモード">
+<a class="card recommended" href="./game.html?mode=score">
+  <span class="recommend">まずはこれ</span>
   <div class="num">MODE 01</div><h2>10球 SCORE ATTACK</h2>
   <p>10球で合計点を競う。強いコンタクトを安定して積み上げる基本モード。</p>
   <div class="meta"><span class="pill">10 PITCHES</span><span class="pill">約45秒</span><span class="pill best">BEST <b data-best="score">—</b></span></div>
@@ -38,17 +41,18 @@ h1{font-size:36px;line-height:1;margin:10px 0 8px}p{color:var(--muted);font:14px
 </a>
 <a class="card" href="./game.html?mode=survival">
   <div class="num">MODE 03</div><h2>3 OUT SURVIVAL</h2>
-  <p>ミス・見逃し3回で終了。連続ヒットで倍率が伸び、10球ごとに変化球比率も上がる。</p>
+  <p>ミス・見逃し3回で終了。連続ヒットで倍率が伸び、10球ごとに難しくなる。</p>
   <div class="meta"><span class="pill">ENDLESS</span><span class="pill">3 OUTS / COMBO</span><span class="pill best">BEST <b data-best="survival">—</b></span></div>
 </a>
 </div>
-<div class="dev">調整用：<a href="./playtest-impact.html">3D IMPACT PLAYTEST</a></div>
-<div class="note">将来の広告はプレイ中ではなく、基本的にリザルト後・モード選択画面へ置く想定。Survivalの任意コンティニュー広告を入れる場合は、ランキング対象外の継続プレイとして分離する。</div>
+<div id="adSlot" class="adSlot" aria-hidden="true">MENU_AD_SLOT</div>
+<div class="footer"><span>ランキング・広告は未実装</span><a href="./playtest-impact.html">DEV PLAYTEST</a></div>
 <script>
 for(const el of document.querySelectorAll('[data-best]')){
   let v=0;
   try{v=Number(localStorage.getItem('batting-best-'+el.dataset.best)||0)||0}catch(e){}
   el.textContent=v||'—';
 }
+window.dispatchEvent(new CustomEvent('batting:menu-ready'));
 </script>
 </main></body></html>
