@@ -76,3 +76,17 @@ A 20-pitch batting-center session where:
 - `swing-model.js`: shared hold/contact/power math.
 
 The playable prototype intentionally keeps a temporary CALIBRATE panel so eye position, gaze target and FOV can be tuned while pitches are moving. Remove or hide it only after the batter view is visually settled.
+
+
+## Impact-model comparison prototype
+
+- `playtest-impact.html`: alternate batting model prototype.
+- Cursor is a translucent barrel/sweet-spot segment on a slanted standard impact surface, not on the strike-zone plane.
+- Standard impact depth moves pitcher-side for inside pitches and catcher-side for outside pitches.
+- Releasing starts the swing; bat reaches impact about 100 ms later.
+- Timing error reduces power and eventually becomes a miss.
+- Contact above/below the barrel changes launch angle.
+- Actual impact depth controls pull/opposite-field spray direction.
+- Pitches outside the strike zone remain hittable within a limited reach margin; max power falls to ~70% at the reach edge.
+- Releasing before the pitch does not swing; it only positions the cursor.
+- Plate-crossing location is marked after the pitch/result.
