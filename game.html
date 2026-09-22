@@ -476,7 +476,7 @@ const ui={
  cal:document.getElementById('cal'),start:document.getElementById('start')
 };
 
-let S={phase:'idle',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null};
+let S={phase:'idle',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null,pendingEnd:false};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rand=(a,b)=>a+Math.random()*(b-a);
 const cameraProbe=new THREE.PerspectiveCamera();
 
@@ -491,7 +491,10 @@ function armNextPitch(now){
 }
 function enterWaiting(now){
   S.phase='waiting';S.locked=false;S.swing=null;
-  if(sessionShouldEnd()){endSession();return}
+  if(sessionShouldEnd()){
+    if(S.batted){S.pendingEnd=true;S.nextDue=Infinity;return}
+    endSession();return
+  }
   armNextPitch(now);
 }
 function updateCameraView(now){
@@ -558,7 +561,7 @@ function nextPitch(now=performance.now()){
 }
 function begin(){
   resetSession();
-  S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null};
+  S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null,pendingEnd:false};
   ui.score.textContent='0000';ui.pitchNo.textContent='0';ui.start.style.display='none';
   nextPitch(performance.now()+250)
 }
@@ -997,6 +1000,7 @@ function animate(now){
     }
     if((t>.18&&battedBall.position.y<=.04)||t>2.5){
       battedBall.visible=false;S.batted=null;
+      if(S.pendingEnd){S.pendingEnd=false;endSession()}
     }
   }else{
     battedBall.visible=false;
