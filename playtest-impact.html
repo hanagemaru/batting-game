@@ -364,6 +364,7 @@ function nextPitch(now=performance.now()){
   ui.pitchNo.textContent=S.n;
   ui.pitchInfo.textContent=S.pitch.type+' · '+S.pitch.course+' · '+FLIGHT_MS[S.pitch.type]+'ms';
   ui.result.classList.remove('on');ui.result.textContent='';
+  impactStatus.textContent='CONTACT: —';
 }
 function begin(){
   S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:0,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0};
@@ -667,12 +668,12 @@ canvas.addEventListener('pointerdown',e=>{
   if(e.pointerType==='mouse'&&e.button!==0)return;
   if(ui.start.style.display!=='none'||S.input||overlayCalOpen||S.phase==='batted'||S.phase==='swinging'||S.phase==='missed')return;
   e.preventDefault();
-  const hit=screenToImpact(e.clientX,e.clientY);if(hit)S.aimWorld.copy(hit);
+  const hit=screenToAim(e.clientX,e.clientY);if(hit)S.aimWorld.copy(hit);
   S.input={id:e.pointerId,down:performance.now()};
   canvas.setPointerCapture?.(e.pointerId)
 },{passive:false});
 canvas.addEventListener('pointermove',e=>{
-  const hit=screenToImpact(e.clientX,e.clientY);
+  const hit=screenToAim(e.clientX,e.clientY);
   if(!hit)return;
   if(S.input&&e.pointerId===S.input.id){e.preventDefault();S.aimWorld.copy(hit);return}
   if(e.pointerType==='mouse'&&ui.start.style.display==='none'&&!['batted','swinging','missed'].includes(S.phase))S.aimWorld.copy(hit);
@@ -692,6 +693,8 @@ document.getElementById('closeCal').onclick=()=>ui.cal.classList.remove('open');
 document.getElementById('resetCam').onclick=()=>{for(const id of controlsIds)ctl[id].value=cfgDefaults[id];applyCamera()};
 pitchMode.onchange=()=>{dev.pitchMode=pitchMode.value;saveDev();syncDevUI()};
 courseMode.onchange=()=>{dev.courseMode=courseMode.value;saveDev();syncDevUI()};
+cursorPlane.onchange=()=>{dev.cursorPlane=cursorPlane.value;saveDev();syncDevUI()};
+swingDelay.oninput=()=>{dev.swingDelay=Number(swingDelay.value);saveDev();syncDevUI()};
 autoBtn.onclick=()=>{
   dev.auto=!dev.auto;saveDev();syncDevUI();
   if(dev.auto&&S.phase!=='pitching'&&ui.start.style.display==='none')S.nextDue=performance.now()+300;
@@ -709,6 +712,83 @@ new ResizeObserver(resize).observe(stage);resize();
 
 function animate(now){
   requestAnimationFrame(animate);
+
+  if(dev.auto&&ui.start.style.display==='none'&&!['pitching','swinging','missed','batted'].includes(S.phase)&&now>=S.nextDue)nextPitch(now);
+
+  if(['pitching','swinging','missed'].includes(S.phase)){
+    const u=(now-S.t0)/FLIGHT_MS[S.pitch.type];
+    ball.position.copy(pitchPosition(u));
+    ball.visible=u<=1.10;
+    for(let i=0;i<trail.length;i++){
+      const tu=u-(i+1)*.026;
+      trail[i].position.copy(pitchPosition(Math.max(0,tu)));
+      trail[i].visible=u<1.08;
+    }
+    if(u>=1)showPlateMarker();
+
+    if(S.phase==='swinging'&&S.swing){
+      scanSwingCollision(now);
+      if(S.phase==='swinging'&&now>S.swing.start+S.swing.delay+FOLLOW_THROUGH_MS&&u>1.02){
+        finishSwingMiss();
+      }
+    }
+
+    if(u>1.10&&S.phase!=='batted'){
+      const hadSwing=S.phase==='missed'||S.phase==='swinging';
+      if(S.phase==='swinging'&&S.swing)finishSwingMiss();
+      ball.visible=false;for(const t of trail)t.visible=false;showPlateMarker();
+
+      if(!hadSwing&&S.phase==='pitching'){
+        ui.result.innerHTML='TAKE<small>PLATE LOCATION MARKED</small>';
+        ui.result.classList.add('on');
+        setTimeout(()=>ui.result.classList.remove('on'),650);
+      }
+      if(S.phase!=='batted'){
+        S.phase='waiting';S.locked=false;S.swing=null;
+      }
+    }
+  }else if(S.phase==='batted'&&S.batted){
+    ball.visible=false;for(const t of trail)t.visible=false;
+    const t=(now-S.batted.t0)/1000;
+    const v=S.batted.velocity;
+    battedBall.position.set(
+      S.batted.start.x+v.x*t,
+      S.batted.start.y+v.y*t-4.9*t*t,
+      S.batted.start.z+v.z*t
+    );
+
+    const pts=S.batted.points;
+    if(!pts.length||pts[pts.length-1].distanceTo(battedBall.position)>.16){
+      pts.push(battedBall.position.clone());
+      if(pts.length>80)pts.shift();
+      setBattedTrail(pts);
+    }
+
+    if((t>.18&&battedBall.position.y<=.04)||t>2.5){
+      battedBall.visible=false;S.batted=null;S.locked=false;S.phase='waiting';
+    }
+  }else{
+    ball.visible=false;battedBall.visible=false;for(const t of trail)t.visible=false;
+  }
+
+  updateCursorBarrel();
+  updateBat(now);
+
+  if(S.pitch){
+    const loc=locationCap(S.pitch.target);
+    ui.power.style.width=Math.round(loc.cap*100)+'%';
+  }else{
+    ui.power.style.width='100%';
+  }
+
+  const remain=dev.auto&&ui.start.style.display==='none'?Math.max(0,S.nextDue-now):0;
+  devStatus.textContent=dev.auto
+    ?'AUTO投球: 3.0秒間隔 / 次まで '+(remain/1000).toFixed(1)+'s / '+dev.pitchMode+' / '+dev.courseMode+' / '+dev.cursorPlane+' / delay '+dev.swingDelay+'ms'
+    :'AUTO停止中 / THROW NOWで1球 / '+dev.pitchMode+' / '+dev.courseMode+' / '+dev.cursorPlane+' / delay '+dev.swingDelay+'ms';
+
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
 
   if(dev.auto&&ui.start.style.display==='none'&&!['pitching','swinging','missed','batted'].includes(S.phase)&&now>=S.nextDue)nextPitch(now);
 
