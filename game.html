@@ -969,6 +969,33 @@ document.getElementById('startBtn').onclick=begin;
 document.getElementById('retryBtn').onclick=begin;
 renderModeUI();
 
+// Mobile/browser interruptions should not consume a pitch while the page is hidden.
+let hiddenAt=null;
+document.addEventListener('visibilitychange',()=>{
+  const now=performance.now();
+  if(document.hidden){
+    hiddenAt=now;
+    S.input=null;
+    return;
+  }
+  if(hiddenAt==null)return;
+  const dt=now-hiddenAt;hiddenAt=null;
+  if(S.t0)S.t0+=dt;
+  if(Number.isFinite(S.nextDue))S.nextDue+=dt;
+  for(const sw of [S.swing,S.visualSwing]){
+    if(!sw)continue;
+    for(const k of ['start','motionStart','impactAt','finishAt','lastCheck','closestTime']){
+      if(Number.isFinite(sw[k]))sw[k]+=dt;
+    }
+  }
+  if(S.hitView){
+    for(const k of ['start','turnEnd','holdUntil','returnUntil']){
+      if(Number.isFinite(S.hitView[k]))S.hitView[k]+=dt;
+    }
+  }
+  if(S.batted&&Number.isFinite(S.batted.t0))S.batted.t0+=dt;
+});
+
 function resize(){
   const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()
 }
