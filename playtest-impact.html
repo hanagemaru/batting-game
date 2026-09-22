@@ -431,20 +431,36 @@ function impactBatPose(x,y){
   const h=Math.cos(tilt);
   const dir=new THREE.Vector3(-h*Math.cos(forward),-Math.sin(tilt),h*Math.sin(forward)).normalize();
   const contact=new THREE.Vector3(x,y,idealImpactZ(x));
-  const hand=contact.clone().addScaledVector(dir,-.70);
+  const hand=contact.clone().addScaledVector(dir,-GRIP_TO_CONTACT);
   return{hand,dir,contact};
+}
+function battingViewBasis(){
+  const eye=new THREE.Vector3(cfg.eyeX,cfg.eyeY,cfg.eyeZ);
+  const look=new THREE.Vector3(cfg.lookX,cfg.lookY,cfg.lookZ);
+  const fwd=look.clone().sub(eye).normalize();
+  const right=new THREE.Vector3().crossVectors(fwd,new THREE.Vector3(0,1,0)).normalize();
+  return{eye,fwd,right,up:new THREE.Vector3(0,1,0)};
+}
+function stanceStartPose(){
+  const b=battingViewBasis();
+  const hand=b.eye.clone()
+    .addScaledVector(b.right,.34)
+    .addScaledVector(b.up,-.34)
+    .addScaledVector(b.fwd,-.16);
+  const dir=b.right.clone().multiplyScalar(.72)
+    .addScaledVector(b.up,.62)
+    .addScaledVector(b.fwd,-.18)
+    .normalize();
+  return{hand,dir};
 }
 function swingPoseBundle(x,y){
   const impact=impactBatPose(x,y);
+  const start=stanceStartPose();
+
   const ih=new THREE.Vector3(impact.dir.x,0,impact.dir.z).normalize();
-
-  const sh=rotateY(ih,THREE.MathUtils.degToRad(-80));
-  const startDir=new THREE.Vector3(sh.x*.82,.57,sh.z*.82).normalize();
-  const start={hand:impact.hand.clone().add(new THREE.Vector3(.08,.08,-.18)),dir:startDir};
-
-  const fh=rotateY(ih,THREE.MathUtils.degToRad(75));
-  const finishDir=new THREE.Vector3(fh.x*.99,.06,fh.z*.99).normalize();
-  const finish={hand:impact.hand.clone().add(new THREE.Vector3(-.08,-.02,.18)),dir:finishDir};
+  const fh=rotateY(ih,THREE.MathUtils.degToRad(78));
+  const finishDir=new THREE.Vector3(fh.x*.98,.08,fh.z*.98).normalize();
+  const finish={hand:impact.hand.clone().add(new THREE.Vector3(-.10,-.05,.20)),dir:finishDir};
   return{start,impact,finish};
 }
 function mixPose(a,b,t){
@@ -455,13 +471,12 @@ function mixPose(a,b,t){
   };
 }
 function swingPoseAt(ms,sw){
-  const impactAt=sw.start+sw.delay;
-  if(ms<=sw.start)return sw.delay<=0?sw.bundle.impact:sw.bundle.start;
-  if(ms<=impactAt){
-    const q=sw.delay<=0?1:clamp((ms-sw.start)/sw.delay,0,1);
+  if(ms<=sw.motionStart)return sw.bundle.start;
+  if(ms<=sw.impactAt){
+    const q=clamp((ms-sw.motionStart)/Math.max(1,sw.toImpactMs),0,1);
     return mixPose(sw.bundle.start,sw.bundle.impact,q);
   }
-  const q=clamp((ms-impactAt)/FOLLOW_THROUGH_MS,0,1);
+  const q=clamp((ms-sw.impactAt)/Math.max(1,sw.followMs),0,1);
   return mixPose(sw.bundle.impact,sw.bundle.finish,q);
 }
 function applyBatPose(pose){
@@ -469,15 +484,13 @@ function applyBatPose(pose){
   worldBat.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),pose.dir.clone().normalize());
 }
 function updateBat(now){
-  worldBat.visible=ui.start.style.display==='none';
-  if(!worldBat.visible)return;
-  if(S.visualSwing){
-    const pose=swingPoseAt(now,S.visualSwing);
-    applyBatPose(pose);
-    if(now>S.visualSwing.start+S.visualSwing.delay+FOLLOW_THROUGH_MS+80)S.visualSwing=null;
-  }else{
-    applyBatPose(swingPoseBundle(S.aimWorld.x,S.aimWorld.y).start);
+  if(!S.visualSwing||ui.start.style.display!=='none'||now<S.visualSwing.motionStart||now>S.visualSwing.finishAt+45){
+    worldBat.visible=false;
+    if(S.visualSwing&&now>S.visualSwing.finishAt+45)S.visualSwing=null;
+    return;
   }
+  worldBat.visible=true;
+  applyBatPose(swingPoseAt(now,S.visualSwing));
 }
 function updateCursorBarrel(){
   const x=S.aimWorld.x,y=S.aimWorld.y;
@@ -492,7 +505,7 @@ function updateCursorBarrel(){
   }
   cursorBarrel.position.copy(pos);
   cursorBarrel.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),axis);
-  cursorBarrel.visible=ui.start.style.display==='none'&&S.phase!=='batted';
+  cursorBarrel.visible=ui.start.style.display==='none'&&!S.hitView&&!['swinging','posthit'].includes(S.phase);
 }
 function screenToAim(clientX,clientY){
   const r=stage.getBoundingClientRect();
@@ -554,7 +567,7 @@ function batVelocityAt(ms,sw,fraction){
   const raw=p2.sub(p1).multiplyScalar(1000/dt);
   const len=raw.length();
   if(len<1e-5)return new THREE.Vector3(0,0,0);
-  const effective=clamp(len*3.0,20,38);
+  const effective=clamp(len,0,45);
   return raw.multiplyScalar(effective/len);
 }
 function idealImpactTimeMs(){
@@ -648,8 +661,8 @@ function beginPhysicalBattedBall(ms,ballPos,near,physics){
 function scanSwingCollision(now){
   const sw=S.swing;
   if(!sw||!S.pitch)return false;
-  const end=Math.min(now,sw.start+sw.delay+FOLLOW_THROUGH_MS);
-  let from=Math.max(sw.lastCheck,sw.start);
+  const end=Math.min(now,sw.finishAt);
+  let from=Math.max(sw.lastCheck,sw.motionStart);
   if(end<from)return false;
   const step=3;
   for(let ms=from;ms<=end+.01;ms+=step){
@@ -683,9 +696,16 @@ function finishSwingMiss(){
 function swing(now){
   if(S.phase!=='pitching'||S.locked||S.swing)return;
   const bundle=swingPoseBundle(S.aimWorld.x,S.aimWorld.y);
+  const speed=clamp(Number(dev.swingSpeed)||2,1,4);
+  const delay=Math.max(0,Number(dev.swingDelay)||0);
+  const motionStart=now+delay;
+  const toImpactMs=BASE_TO_CONTACT_MS/speed;
+  const impactAt=motionStart+toImpactMs;
+  const followMs=BASE_FOLLOW_THROUGH_MS/speed;
+  const finishAt=impactAt+followMs;
   const sw={
-    start:now,delay:Number(dev.swingDelay)||0,bundle,lastCheck:now,
-    closestDist:Infinity,closestTime:now,closestTiming:0
+    start:now,delay,speed,motionStart,toImpactMs,impactAt,followMs,finishAt,
+    bundle,lastCheck:motionStart,closestDist:Infinity,closestTime:now,closestTiming:0
   };
   S.swing=sw;S.visualSwing={...sw};
   S.phase='swinging';S.locked=true;
