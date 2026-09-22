@@ -329,7 +329,7 @@ const ui={
  cal:document.getElementById('cal'),start:document.getElementById('start')
 };
 
-let S={phase:'idle',n:0,score:0,pitch:null,t0:0,nextDue:0,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,swingStarted:0,batted:null,markerShown:false};
+let S={phase:'idle',n:0,score:0,pitch:null,t0:0,nextDue:0,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rand=(a,b)=>a+Math.random()*(b-a);
 
 function selectedType(){
@@ -359,14 +359,14 @@ function makePitch(){
   };
 }
 function nextPitch(now=performance.now()){
-  S.n++;S.pitch=makePitch();S.t0=now;S.nextDue=now+INTERVAL_MS;S.locked=false;S.swing=null;S.swingStarted=0;S.batted=null;S.markerShown=false;S.phase='pitching';
-  ball.visible=true;battedBall.visible=false;plateCrossMarker.visible=false;for(const t of trail)t.visible=true;
+  S.n++;S.pitch=makePitch();S.t0=now;S.nextDue=now+INTERVAL_MS;S.locked=false;S.swing=null;S.visualSwing=null;S.batted=null;S.markerShown=false;S.phase='pitching';
+  ball.visible=true;battedBall.visible=false;battedTrail.visible=false;plateCrossMarker.visible=false;contactMarker.visible=false;for(const t of trail)t.visible=true;
   ui.pitchNo.textContent=S.n;
   ui.pitchInfo.textContent=S.pitch.type+' · '+S.pitch.course+' · '+FLIGHT_MS[S.pitch.type]+'ms';
   ui.result.classList.remove('on');ui.result.textContent='';
 }
 function begin(){
-  S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:0,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,swingStarted:0,batted:null,markerShown:false};
+  S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:0,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0};
   ui.score.textContent='0000';ui.pitchNo.textContent='0';ui.start.style.display='none';
   nextPitch(performance.now()+250)
 }
