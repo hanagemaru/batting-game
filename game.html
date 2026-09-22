@@ -20,7 +20,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 .cursor{position:absolute;width:30px;height:30px;border:2px solid var(--contact);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:3}
 .cursor:before,.cursor:after{content:"";position:absolute;left:50%;top:50%;background:#fff;transform:translate(-50%,-50%)}
 .cursor:before{width:12px;height:1px}.cursor:after{width:1px;height:12px}
-.hint{position:absolute;left:50%;top:42px;transform:translateX(-50%);max-width:calc(100% - 20px);font-size:8px;line-height:1.35;text-align:center;color:#a7b4be;background:#061018b8;border:1px solid #2b3946;padding:5px 7px;white-space:normal;pointer-events:none;z-index:2}
+.hint{position:absolute;left:50%;top:42px;transform:translateX(-50%);max-width:calc(100% - 20px);font-size:8px;line-height:1.35;text-align:center;color:#a7b4be;background:#061018b8;border:1px solid #2b3946;padding:5px 7px;white-space:normal;pointer-events:none;z-index:2;transition:opacity .2s}
 .calBtn{display:none!important}.cal{display:none!important}
 .modeHud{position:absolute;left:8px;top:8px;z-index:4;display:flex;gap:6px;align-items:center;pointer-events:none}
 .modePill{background:#061018cc;border:1px solid #334653;padding:6px 8px;font-size:8px;font-weight:900;letter-spacing:.08em}
@@ -67,12 +67,12 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 
 <section class="stage" id="stage">
   <canvas id="three"></canvas>
-  <div class="hint">ドラッグで狙う → 投球中に離してスイング</div>
-  <div class="modeHud"><div id="modeStatus" class="modePill"></div><div id="targetStatus" class="modePill targetPill" style="display:none"></div></div>
+  <div id="hint" class="hint">ドラッグで狙う → 投球中に離してスイング</div>
+  <div class="modeHud"><div id="modeStatus" class="modePill" aria-live="polite"></div><div id="targetStatus" class="modePill targetPill" style="display:none"></div></div>
   <a class="modeBack" href="./modes.html">MODES</a>
   <button id="calBtn" class="calBtn">CALIBRATE →</button>
   <div id="cursor" class="cursor" style="display:none"></div>
-  <div id="result" class="result"></div>
+  <div id="result" class="result" role="status" aria-live="polite"></div>
 
   <aside id="cal" class="cal">
     <h2>DEV PITCH CONTROL</h2>
@@ -508,6 +508,7 @@ function armNextPitch(now){
 }
 function enterWaiting(now){
   S.phase='waiting';S.locked=false;S.swing=null;
+  if(S.n>0)document.getElementById('hint').style.opacity='0';
   if(sessionShouldEnd()){
     if(S.batted){
       S.pendingEnd=true;S.phase='ending';S.locked=true;S.nextDue=Infinity;return
@@ -591,6 +592,7 @@ function begin(){
   resetSession();
   S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null,pendingEnd:false};
   ui.score.textContent='0000';ui.pitchNo.textContent='0';ui.pitchInfo.textContent='READY';ui.start.style.display='none';
+  document.getElementById('hint').style.opacity='1';
   enterWaiting(performance.now())
 }
 
