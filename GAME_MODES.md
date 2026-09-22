@@ -24,7 +24,6 @@ The player build does not reveal pitch type, course, or flight time before/durin
 - A hit scores primarily from contact power/quality (base score up to roughly 100 per hit under the current model).
 - Miss/take = 0.
 - Local best score is stored.
-- Pitch mix gets harder every 10 pitches (more breaking balls, no artificial speed-up).
 - Current expected run length is roughly 40–50 seconds because the 3-second interval starts after each play becomes controllable again.
 
 **Future monetization fit:** result-screen interstitial, frequency capped rather than every run. No ads between pitches.
@@ -60,6 +59,7 @@ These thresholds are tuning values, not final baseball claims. The +100 bonus is
 - Consecutive hits increase combo multiplier:
   - x1.00, x1.15, x1.30 ... capped at x2.50.
 - A miss/take resets combo to zero.
+- Pitch mix gets harder every 10 pitches (more breaking balls, no artificial speed-up).
 - Local best score is stored.
 
 The x2.50 cap prevents a very long streak from making late hits disproportionately dominant while still rewarding consistency.
