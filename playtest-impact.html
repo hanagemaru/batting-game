@@ -756,14 +756,12 @@ function animate(now){
       S.batted.start.y+v.y*t-4.9*t*t,
       S.batted.start.z+v.z*t
     );
-
     const pts=S.batted.points;
     if(!pts.length||pts[pts.length-1].distanceTo(battedBall.position)>.16){
       pts.push(battedBall.position.clone());
       if(pts.length>80)pts.shift();
       setBattedTrail(pts);
     }
-
     if((t>.18&&battedBall.position.y<=.04)||t>2.5){
       battedBall.visible=false;S.batted=null;S.locked=false;S.phase='waiting';
     }
@@ -785,69 +783,6 @@ function animate(now){
   devStatus.textContent=dev.auto
     ?'AUTO投球: 3.0秒間隔 / 次まで '+(remain/1000).toFixed(1)+'s / '+dev.pitchMode+' / '+dev.courseMode+' / '+dev.cursorPlane+' / delay '+dev.swingDelay+'ms'
     :'AUTO停止中 / THROW NOWで1球 / '+dev.pitchMode+' / '+dev.courseMode+' / '+dev.cursorPlane+' / delay '+dev.swingDelay+'ms';
-
-  renderer.render(scene,camera);
-}
-requestAnimationFrame(animate);
-
-  if(dev.auto&&ui.start.style.display==='none'&&!['pitching','swinging','missed','batted'].includes(S.phase)&&now>=S.nextDue)nextPitch(now);
-
-  if(['pitching','swinging','missed'].includes(S.phase)){
-    const u=(now-S.t0)/FLIGHT_MS[S.pitch.type];
-    ball.position.copy(pitchPosition(u));
-    ball.visible=u<=1.10;
-    for(let i=0;i<trail.length;i++){
-      const tu=u-(i+1)*.026;
-      trail[i].position.copy(pitchPosition(Math.max(0,tu)));
-      trail[i].visible=u<1.08;
-    }
-    if(u>=1)showPlateMarker();
-
-    if(S.phase==='swinging'&&S.swing&&now>=S.swing.impactAt)resolveSwing(now);
-
-    if(u>1.10&&S.phase!=='batted'){
-      const hadSwing=S.phase==='missed'||S.phase==='swinging';
-      if(S.phase==='swinging'&&S.swing)resolveSwing(now);
-      ball.visible=false;for(const t of trail)t.visible=false;showPlateMarker();
-
-      if(!hadSwing&&S.phase==='pitching'){
-        ui.result.innerHTML='TAKE<small>PLATE LOCATION MARKED</small>';
-        ui.result.classList.add('on');
-        setTimeout(()=>ui.result.classList.remove('on'),650);
-      }
-      if(S.phase!=='batted'){
-        S.phase='waiting';S.locked=false;S.swing=null;
-      }
-    }
-  }else if(S.phase==='batted'&&S.batted){
-    ball.visible=false;for(const t of trail)t.visible=false;
-    const t=(now-S.batted.t0)/1000;
-    battedBall.position.set(
-      S.batted.start.x+S.batted.vx*t,
-      S.batted.start.y+S.batted.vy*t-4.9*t*t,
-      S.batted.start.z+S.batted.vz*t
-    );
-    if((t>.18&&battedBall.position.y<=.04)||t>2.5){
-      battedBall.visible=false;S.batted=null;S.locked=false;S.phase='waiting';
-    }
-  }else{
-    ball.visible=false;battedBall.visible=false;for(const t of trail)t.visible=false;
-  }
-
-  updateCursorBarrel();
-  updateBat(now);
-
-  if(S.pitch){
-    const loc=locationCap(S.pitch.target);
-    ui.power.style.width=Math.round(loc.cap*100)+'%';
-  }else{
-    ui.power.style.width='100%';
-  }
-
-  const remain=dev.auto&&ui.start.style.display==='none'?Math.max(0,S.nextDue-now):0;
-  devStatus.textContent=dev.auto
-    ?'AUTO投球: 3.0秒間隔 / 次まで '+(remain/1000).toFixed(1)+'s / '+dev.pitchMode+' / '+dev.courseMode
-    :'AUTO停止中 / THROW NOWで1球 / '+dev.pitchMode+' / '+dev.courseMode;
 
   renderer.render(scene,camera);
 }
