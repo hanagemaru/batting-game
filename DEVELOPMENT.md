@@ -90,3 +90,21 @@ The playable prototype intentionally keeps a temporary CALIBRATE panel so eye po
 - Pitches outside the strike zone remain hittable within a limited reach margin; max power falls to ~70% at the reach edge.
 - Releasing before the pitch does not swing; it only positions the cursor.
 - Plate-crossing location is marked after the pitch/result.
+
+
+## Impact prototype v2 — physical bat path
+
+Current `playtest-impact.html` now tests the following alternatives:
+
+- Cursor display plane can switch between `STRIKE PLANE` and `IMPACT SURFACE`.
+- Swing delay is adjustable from 0–180 ms; default is 0 ms for the current comparison.
+- Cursor X/Y is the intended pitch-location target. Actual bat contact geometry is always computed in 3D at the course-dependent impact depth.
+- The visible bat is a world-space bat whose hand point and barrel direction are derived from the selected location:
+  - outside/high produces the flattest barrel,
+  - inside/low produces the steepest barrel,
+  - inside contact also carries the hands/barrel farther pitcher-side.
+- A swing has start, impact, and follow-through poses. Collision is checked along the moving sweet-spot segment rather than at a single arbitrary frame.
+- Incoming ball velocity, bat contact-point velocity, collision normal, timing error, location power cap, and sweet-spot position feed the outgoing-ball result.
+- The outgoing ball begins at the exact incoming-ball center at the detected collision time.
+- A retained incoming trail and outgoing trail meet at the contact point so trajectory discontinuities are visible during debugging.
+- A contact marker and numeric contact readout expose the computed x/y/z, bat speed, launch and spray for calibration.
