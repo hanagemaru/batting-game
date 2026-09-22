@@ -108,11 +108,16 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
           <input id="swingDelay" type="range" min="0" max="180" step="10" value="0"><output>0ms</output>
         </div>
       </label>
+      <label class="devField">Swing speed
+        <div class="ctrl" style="grid-template-columns:1fr 48px">
+          <input id="swingSpeed" type="range" min="1" max="4" step="0.25" value="2"><output>2.00x</output>
+        </div>
+      </label>
     </div>
     <div class="calActions"><button id="throwNow">THROW NOW</button><button id="autoBtn">AUTO: ON / 3s</button></div>
     <div id="devStatus" class="devStatus">AUTO投球: 3.0秒間隔</div>
     <div id="impactStatus" class="devStatus">CONTACT: —</div>
-    <div class="devNote">INSIDE = 右打者に近い三塁側（+X）、OUTSIDE = 一塁側（−X）。BALL系はゾーン外を検証します。<br>STRIKE PLANEはカーソルをホームベース前端のストライクゾーン面に表示し、IMPACT SURFACEはコースごとの標準インパクト面に表示します。物理判定はどちらも同じ3Dスイングモデルを使います。</div>
+    <div class="devNote">INSIDE = 右打者に近い三塁側（+X）、OUTSIDE = 一塁側（−X）。BALL系はゾーン外を検証します。<br>STRIKE PLANEはカーソルをホームベース前端のストライクゾーン面に表示し、IMPACT SURFACEはコースごとの標準インパクト面に表示します。物理判定はどちらも同じ3Dスイングモデルです。Swing delayはスイング開始前の待ち時間、Swing speedは実際のバット移動速度です。</div>
 
     <h2>BATTER CAMERA CALIBRATION</h2>
     <div class="grid">
@@ -160,13 +165,19 @@ const ZONE_LOW=.52,ZONE_HIGH=1.16;
 const REACH_X=.17,REACH_Y=.18;
 const IMPACT_SLOPE=1.18;
 const TIMING_MISS_MS=90;
-const BAT_LENGTH=.88;
-const SWEET_START=.54;
-const SWEET_END=.84;
-const BAT_RADIUS=.038;
+const BAT_LENGTH=.864; // 34 in adult bat
+const BAT_BARREL_RADIUS=.033; // ~2.6 in max diameter
+const BAT_HANDLE_RADIUS=.014;
+const GRIP_TO_CONTACT=.72;
+const SWEET_START=.56;
+const SWEET_END=.82;
+const BAT_RADIUS=.033;
 const BALL_RADIUS=.0365;
-const COLLISION_RADIUS=BAT_RADIUS+BALL_RADIUS+.010;
-const FOLLOW_THROUGH_MS=260;
+const COLLISION_RADIUS=BAT_RADIUS+BALL_RADIUS+.009;
+const BASE_TO_CONTACT_MS=100;
+const BASE_FOLLOW_THROUGH_MS=220;
+const HIT_VIEW_HOLD_MS=500;
+const HIT_VIEW_RETURN_MS=150;
 const stage=document.querySelector('#stage'),canvas=document.querySelector('#three');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -239,15 +250,15 @@ scene.add(camera);
 // That makes its rendered path use the same geometry as collision detection.
 const worldBat=new THREE.Group();
 const batMesh=new THREE.Mesh(
-  new THREE.CylinderGeometry(.044,.018,BAT_LENGTH,16),
+  new THREE.CylinderGeometry(BAT_BARREL_RADIUS,BAT_HANDLE_RADIUS,BAT_LENGTH,18),
   new THREE.MeshStandardMaterial({color:0xc79a63,roughness:.60,metalness:.02})
 );
 batMesh.position.y=BAT_LENGTH/2;
 worldBat.add(batMesh);
 const skinMat=new THREE.MeshStandardMaterial({color:0xd2a07a,roughness:.8});
-const handA=new THREE.Mesh(new THREE.SphereGeometry(.042,12,8),skinMat);
-const handB=new THREE.Mesh(new THREE.SphereGeometry(.040,12,8),skinMat);
-handA.position.y=.035;handB.position.y=.105;
+const handA=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),skinMat);
+const handB=new THREE.Mesh(new THREE.SphereGeometry(.034,12,8),skinMat);
+handA.position.y=.030;handB.position.y=.090;
 worldBat.add(handA,handB);
 scene.add(worldBat);
 
@@ -293,14 +304,15 @@ try{Object.assign(cfg,JSON.parse(localStorage.getItem(STORAGE)||'{}'))}catch(e){
 for(const id of controlsIds){ctl[id].value=cfg[id]}
 
 const DEV_STORAGE='batting-impact-dev-v2';
-const dev={pitchMode:'RANDOM',courseMode:'RANDOM',cursorPlane:'STRIKE',swingDelay:0,auto:true};
+const dev={pitchMode:'RANDOM',courseMode:'RANDOM',cursorPlane:'STRIKE',swingDelay:0,swingSpeed:2,auto:true};
 try{Object.assign(dev,JSON.parse(localStorage.getItem(DEV_STORAGE)||'{}'))}catch(e){}
-const pitchMode=document.getElementById('pitchMode'),courseMode=document.getElementById('courseMode'),cursorPlane=document.getElementById('cursorPlane'),swingDelay=document.getElementById('swingDelay'),autoBtn=document.getElementById('autoBtn'),devStatus=document.getElementById('devStatus'),impactStatus=document.getElementById('impactStatus');
+const pitchMode=document.getElementById('pitchMode'),courseMode=document.getElementById('courseMode'),cursorPlane=document.getElementById('cursorPlane'),swingDelay=document.getElementById('swingDelay'),swingSpeed=document.getElementById('swingSpeed'),autoBtn=document.getElementById('autoBtn'),devStatus=document.getElementById('devStatus'),impactStatus=document.getElementById('impactStatus');
 function saveDev(){try{localStorage.setItem(DEV_STORAGE,JSON.stringify(dev))}catch(e){}}
 function syncDevUI(){
   autoBtn.textContent=dev.auto?'AUTO: ON / 3s':'AUTO: OFF';
   pitchMode.value=dev.pitchMode;courseMode.value=dev.courseMode;cursorPlane.value=dev.cursorPlane;
   swingDelay.value=dev.swingDelay;swingDelay.nextElementSibling.value=Math.round(dev.swingDelay)+'ms';
+  swingSpeed.value=dev.swingSpeed;swingSpeed.nextElementSibling.value=Number(dev.swingSpeed).toFixed(2)+'x';
 }
 syncDevUI();
 
@@ -335,7 +347,7 @@ const ui={
  cal:document.getElementById('cal'),start:document.getElementById('start')
 };
 
-let S={phase:'idle',n:0,score:0,pitch:null,t0:0,nextDue:0,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0};
+let S={phase:'idle',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rand=(a,b)=>a+Math.random()*(b-a);
 
 function selectedType(){
@@ -365,7 +377,7 @@ function makePitch(){
   };
 }
 function nextPitch(now=performance.now()){
-  S.n++;S.pitch=makePitch();S.t0=now;S.nextDue=now+INTERVAL_MS;S.locked=false;S.swing=null;S.visualSwing=null;S.batted=null;S.markerShown=false;S.phase='pitching';
+  S.n++;S.pitch=makePitch();S.t0=now;S.nextDue=Infinity;S.locked=false;S.swing=null;S.visualSwing=null;S.batted=null;S.markerShown=false;S.phase='pitching';
   ball.visible=true;battedBall.visible=false;incomingImpactTrail.visible=false;battedTrail.visible=false;plateCrossMarker.visible=false;contactMarker.visible=false;for(const t of trail)t.visible=true;
   ui.pitchNo.textContent=S.n;
   ui.pitchInfo.textContent=S.pitch.type+' · '+S.pitch.course+' · '+FLIGHT_MS[S.pitch.type]+'ms';
@@ -373,7 +385,7 @@ function nextPitch(now=performance.now()){
   impactStatus.textContent='CONTACT: —';
 }
 function begin(){
-  S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:0,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0};
+  S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null};
   ui.score.textContent='0000';ui.pitchNo.textContent='0';ui.start.style.display='none';
   nextPitch(performance.now()+250)
 }
@@ -711,6 +723,7 @@ pitchMode.onchange=()=>{dev.pitchMode=pitchMode.value;saveDev();syncDevUI()};
 courseMode.onchange=()=>{dev.courseMode=courseMode.value;saveDev();syncDevUI()};
 cursorPlane.onchange=()=>{dev.cursorPlane=cursorPlane.value;saveDev();syncDevUI()};
 swingDelay.oninput=()=>{dev.swingDelay=Number(swingDelay.value);saveDev();syncDevUI()};
+swingSpeed.oninput=()=>{dev.swingSpeed=Number(swingSpeed.value);saveDev();syncDevUI()};
 autoBtn.onclick=()=>{
   dev.auto=!dev.auto;saveDev();syncDevUI();
   if(dev.auto&&S.phase!=='pitching'&&ui.start.style.display==='none')S.nextDue=performance.now()+300;
