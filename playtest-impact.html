@@ -235,31 +235,48 @@ scene.add(plateCrossMarker);
 const camera=new THREE.PerspectiveCamera(80,1,.03,80);
 scene.add(camera);
 
-// Full bat in first-person view.
-const batPivot=new THREE.Group();
-camera.add(batPivot);
+// The visible bat now lives in world space. Local +Y runs from hands -> barrel tip.
+// That makes its rendered path use the same geometry as collision detection.
+const worldBat=new THREE.Group();
 const batMesh=new THREE.Mesh(
-  new THREE.CylinderGeometry(.025,.045,.88,14),
-  new THREE.MeshStandardMaterial({color:0xc79a63,roughness:.62,metalness:.02})
+  new THREE.CylinderGeometry(.044,.018,BAT_LENGTH,16),
+  new THREE.MeshStandardMaterial({color:0xc79a63,roughness:.60,metalness:.02})
 );
-batMesh.position.y=.39;
-batPivot.add(batMesh);
-batPivot.position.set(.49,-.35,-.84);
+batMesh.position.y=BAT_LENGTH/2;
+worldBat.add(batMesh);
+const skinMat=new THREE.MeshStandardMaterial({color:0xd2a07a,roughness:.8});
+const handA=new THREE.Mesh(new THREE.SphereGeometry(.042,12,8),skinMat);
+const handB=new THREE.Mesh(new THREE.SphereGeometry(.040,12,8),skinMat);
+handA.position.y=.035;handB.position.y=.105;
+worldBat.add(handA,handB);
+scene.add(worldBat);
 
-// Ghost barrel = the aiming cursor. It lives on the standard impact surface.
+// Ghost barrel = aiming cursor. Its display plane is switchable in the dev panel.
 const cursorBarrel=new THREE.Mesh(
-  new THREE.CapsuleGeometry(.045,.30,5,12),
+  new THREE.CapsuleGeometry(.045,.28,5,12),
   new THREE.MeshStandardMaterial({color:0x8de7b1,transparent:true,opacity:.58,emissive:0x173f2b,depthTest:false})
 );
 cursorBarrel.renderOrder=4;
 scene.add(cursorBarrel);
 
+const contactMarker=new THREE.Mesh(
+  new THREE.SphereGeometry(.055,16,10),
+  new THREE.MeshBasicMaterial({color:0xffaa62,transparent:true,opacity:.95,depthTest:false})
+);
+contactMarker.visible=false;contactMarker.renderOrder=5;scene.add(contactMarker);
+
 const battedBall=new THREE.Mesh(
-  new THREE.SphereGeometry(.0365,20,14),
+  new THREE.SphereGeometry(BALL_RADIUS,20,14),
   new THREE.MeshStandardMaterial({color:0xffffff,roughness:.48})
 );
 battedBall.visible=false;
 scene.add(battedBall);
+
+const battedTrail=new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
+  new THREE.LineBasicMaterial({color:0xffd071,transparent:true,opacity:.72})
+);
+battedTrail.visible=false;scene.add(battedTrail);
 
 const cfg={eyeX:.69,eyeY:1.45,eyeZ:0.00,lookX:.43,lookY:1.24,lookZ:.43,fov:80};
 const cfgDefaults={...cfg};
