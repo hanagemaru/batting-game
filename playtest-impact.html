@@ -401,29 +401,96 @@ function barrelAngle(x,y){
   const high=clamp((y-ZONE_LOW)/(ZONE_HIGH-ZONE_LOW),0,1);
   return THREE.MathUtils.degToRad(5+20*inside+20*(1-high));
 }
-function barrelAxis(x,y){
-  const a=barrelAngle(x,y);
-  return new THREE.Vector3(-Math.cos(a),-Math.sin(a),0).normalize();
+function rotateY(v,a){
+  const c=Math.cos(a),sn=Math.sin(a);
+  return new THREE.Vector3(v.x*c+v.z*sn,v.y,-v.x*sn+v.z*c);
+}
+function impactBatPose(x,y){
+  const inside=clamp((x+PLATE_HALF)/(2*PLATE_HALF),0,1);
+  const tilt=barrelAngle(x,y);
+  const forward=THREE.MathUtils.degToRad(10+25*inside);
+  const h=Math.cos(tilt);
+  const dir=new THREE.Vector3(-h*Math.cos(forward),-Math.sin(tilt),h*Math.sin(forward)).normalize();
+  const contact=new THREE.Vector3(x,y,idealImpactZ(x));
+  const hand=contact.clone().addScaledVector(dir,-.70);
+  return{hand,dir,contact};
+}
+function swingPoseBundle(x,y){
+  const impact=impactBatPose(x,y);
+  const ih=new THREE.Vector3(impact.dir.x,0,impact.dir.z).normalize();
+
+  const sh=rotateY(ih,THREE.MathUtils.degToRad(-80));
+  const startDir=new THREE.Vector3(sh.x*.82,.57,sh.z*.82).normalize();
+  const start={hand:impact.hand.clone().add(new THREE.Vector3(.08,.08,-.18)),dir:startDir};
+
+  const fh=rotateY(ih,THREE.MathUtils.degToRad(75));
+  const finishDir=new THREE.Vector3(fh.x*.99,.06,fh.z*.99).normalize();
+  const finish={hand:impact.hand.clone().add(new THREE.Vector3(-.08,-.02,.18)),dir:finishDir};
+  return{start,impact,finish};
+}
+function mixPose(a,b,t){
+  const e=t*t*(3-2*t);
+  return{
+    hand:a.hand.clone().lerp(b.hand,e),
+    dir:a.dir.clone().lerp(b.dir,e).normalize()
+  };
+}
+function swingPoseAt(ms,sw){
+  const impactAt=sw.start+sw.delay;
+  if(ms<=sw.start)return sw.delay<=0?sw.bundle.impact:sw.bundle.start;
+  if(ms<=impactAt){
+    const q=sw.delay<=0?1:clamp((ms-sw.start)/sw.delay,0,1);
+    return mixPose(sw.bundle.start,sw.bundle.impact,q);
+  }
+  const q=clamp((ms-impactAt)/FOLLOW_THROUGH_MS,0,1);
+  return mixPose(sw.bundle.impact,sw.bundle.finish,q);
+}
+function applyBatPose(pose){
+  worldBat.position.copy(pose.hand);
+  worldBat.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),pose.dir.clone().normalize());
+}
+function updateBat(now){
+  worldBat.visible=ui.start.style.display==='none';
+  if(!worldBat.visible)return;
+  if(S.visualSwing){
+    const pose=swingPoseAt(now,S.visualSwing);
+    applyBatPose(pose);
+    if(now>S.visualSwing.start+S.visualSwing.delay+FOLLOW_THROUGH_MS+80)S.visualSwing=null;
+  }else{
+    applyBatPose(swingPoseBundle(S.aimWorld.x,S.aimWorld.y).start);
+  }
 }
 function updateCursorBarrel(){
-  const p=S.aimWorld;
-  p.z=idealImpactZ(p.x);
-  cursorBarrel.position.copy(p);
-  const axis=barrelAxis(p.x,p.y);
+  const x=S.aimWorld.x,y=S.aimWorld.y;
+  let pos,axis;
+  if(dev.cursorPlane==='STRIKE'){
+    pos=new THREE.Vector3(x,y,PLATE_FRONT-.012);
+    const a=barrelAngle(x,y);
+    axis=new THREE.Vector3(-Math.cos(a),-Math.sin(a),0).normalize();
+  }else{
+    const pose=impactBatPose(x,y);
+    pos=pose.contact;axis=pose.dir;
+  }
+  cursorBarrel.position.copy(pos);
   cursorBarrel.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),axis);
   cursorBarrel.visible=ui.start.style.display==='none'&&S.phase!=='batted';
 }
-function screenToImpact(clientX,clientY){
+function screenToAim(clientX,clientY){
   const r=stage.getBoundingClientRect();
   const ndc=new THREE.Vector2(((clientX-r.left)/r.width)*2-1,-(((clientY-r.top)/r.height)*2-1));
   const ray=new THREE.Raycaster();ray.setFromCamera(ndc,camera);
-  const n=new THREE.Vector3(-IMPACT_SLOPE,0,1).normalize();
-  const plane=new THREE.Plane(n,-n.z*PLATE_FRONT);
+  let plane;
+  if(dev.cursorPlane==='STRIKE'){
+    plane=new THREE.Plane(new THREE.Vector3(0,0,1),-PLATE_FRONT);
+  }else{
+    const n=new THREE.Vector3(-IMPACT_SLOPE,0,1).normalize();
+    plane=new THREE.Plane(n,-n.z*PLATE_FRONT);
+  }
   const hit=new THREE.Vector3();
   if(!ray.ray.intersectPlane(plane,hit))return null;
   hit.x=clamp(hit.x,-PLATE_HALF-REACH_X,PLATE_HALF+REACH_X);
   hit.y=clamp(hit.y,ZONE_LOW-REACH_Y,ZONE_HIGH+REACH_Y);
-  hit.z=idealImpactZ(hit.x);
+  hit.z=dev.cursorPlane==='STRIKE'?PLATE_FRONT:idealImpactZ(hit.x);
   return hit;
 }
 function showPlateMarker(){
@@ -432,91 +499,166 @@ function showPlateMarker(){
   plateCrossMarker.visible=true;
   S.markerShown=true;
 }
-function updateBat(now){
-  const restZ=-.28,restX=.10;
-  if(!S.swingStarted){batPivot.rotation.set(restX,0,restZ);return}
-  const t=clamp((now-S.swingStarted)/360,0,1);
-  const contactT=SWING_TO_IMPACT_MS/360;
-  let e;
-  if(t<=contactT)e=.52*(t/contactT);
-  else e=.52+.48*((t-contactT)/(1-contactT));
-  e=1-Math.pow(1-e,1.7);
-  batPivot.rotation.x=restX-.16*e;
-  batPivot.rotation.z=restZ-2.30*e;
-  if(t>=1&&S.phase!=='swinging')S.swingStarted=0;
-}
-function pointSegmentMetrics(px,py,cx,cy,axis){
-  const ax=cx-axis.x*BARREL_HALF_LEN,ay=cy-axis.y*BARREL_HALF_LEN;
-  const bx=cx+axis.x*BARREL_HALF_LEN,by=cy+axis.y*BARREL_HALF_LEN;
-  const vx=bx-ax,vy=by-ay,wx=px-ax,wy=py-ay;
-  const t=clamp((wx*vx+wy*vy)/(vx*vx+vy*vy),0,1);
-  const qx=ax+vx*t,qy=ay+vy*t;
-  const dx=px-qx,dy=py-qy;
-  const upNormal={x:axis.y,y:-axis.x};
-  return{distance:Math.hypot(dx,dy),signedVertical:dx*upNormal.x+dy*upNormal.y,t};
-}
 function timingFactor(errorMs){
   const a=Math.abs(errorMs);
   if(a>=TIMING_MISS_MS)return 0;
   return 1-Math.pow(a/TIMING_MISS_MS,1.45);
 }
-function beginBattedBall(now,start,power,signedVertical){
-  const speed=18+24*power;
-  const sprayDeg=clamp((start.z-PLATE_FRONT)*78,-36,36);
-  const launchDeg=clamp(12+(signedVertical/BARREL_RADIUS)*28,-14,44);
-  const spray=THREE.MathUtils.degToRad(sprayDeg),launch=THREE.MathUtils.degToRad(launchDeg);
-  const planar=speed*Math.cos(launch);
-  S.batted={
-    t0:now,start:start.clone(),
-    vx:planar*Math.sin(spray),
-    vy:speed*Math.sin(launch),
-    vz:planar*Math.cos(spray),
-    power,sprayDeg,launchDeg
+function closestOnSegment(p,a,b){
+  const ab=b.clone().sub(a);
+  const t=clamp(p.clone().sub(a).dot(ab)/Math.max(1e-9,ab.lengthSq()),0,1);
+  const q=a.clone().addScaledVector(ab,t);
+  return{point:q,t,distance:q.distanceTo(p)};
+}
+function sweetSegment(pose){
+  return{
+    a:pose.hand.clone().addScaledVector(pose.dir,SWEET_START),
+    b:pose.hand.clone().addScaledVector(pose.dir,SWEET_END)
   };
-  battedBall.position.copy(start);battedBall.visible=true;
-  ball.visible=false;for(const t of trail)t.visible=false;
-  S.phase='batted';S.locked=true;
-  showPlateMarker();
 }
-function resolveSwing(now){
-  if(!S.swing||!S.pitch)return;
-  const impactAt=S.swing.impactAt;
-  const u=(impactAt-S.t0)/FLIGHT_MS[S.pitch.type];
-  const p=pitchPosition(u);
-  const idealU=idealImpactU(S.pitch);
-  const timingErrorMs=(u-idealU)*FLIGHT_MS[S.pitch.type];
-  const tf=timingFactor(timingErrorMs);
-  const loc=locationCap(S.pitch.target);
-  const axis=barrelAxis(S.swing.aim.x,S.swing.aim.y);
-  const m=pointSegmentMetrics(p.x,p.y,S.swing.aim.x,S.swing.aim.y,axis);
-  const spatialHit=m.distance<=BARREL_RADIUS;
-  const hit=loc.reachable&&spatialHit&&tf>0;
-  S.swing=null;
-
-  if(!hit){
-    const reason=!loc.reachable?'OUT OF REACH':!spatialHit?'MISS AIM':(timingErrorMs<0?'TOO EARLY':'TOO LATE');
-    ui.result.innerHTML='MISS<small>'+reason+' · Δ '+Math.round(timingErrorMs)+'ms</small>';
-    ui.result.classList.add('on');setTimeout(()=>ui.result.classList.remove('on'),850);
-    S.phase='missed';S.locked=true;
-    ui.contact.style.width=Math.round(tf*100)+'%';
-    ui.power.style.width=Math.round(loc.cap*100)+'%';
-    return;
+function pointOnSweet(pose,t){
+  const seg=sweetSegment(pose);
+  return seg.a.clone().lerp(seg.b,t);
+}
+function ballAtMs(ms){
+  return pitchPosition((ms-S.t0)/FLIGHT_MS[S.pitch.type]);
+}
+function ballVelocityAt(ms){
+  const dt=1.5;
+  const a=ballAtMs(ms-dt),b=ballAtMs(ms+dt);
+  return b.sub(a).multiplyScalar(1000/(dt*2));
+}
+function batVelocityAt(ms,sw,fraction){
+  const dt=2;
+  const p1=pointOnSweet(swingPoseAt(ms,sw),fraction);
+  const p2=pointOnSweet(swingPoseAt(ms+dt,sw),fraction);
+  const raw=p2.sub(p1).multiplyScalar(1000/dt);
+  const len=raw.length();
+  if(len<1e-5)return new THREE.Vector3(0,0,0);
+  const effective=clamp(len*3.0,20,38);
+  return raw.multiplyScalar(effective/len);
+}
+function idealImpactTimeMs(){
+  return S.t0+idealImpactU(S.pitch)*FLIGHT_MS[S.pitch.type];
+}
+function physicalExitVelocity(ms,sw,ballPos,near){
+  const pose=swingPoseAt(ms,sw);
+  const vIn=ballVelocityAt(ms);
+  const vBat=batVelocityAt(ms,sw,near.t);
+  let n=ballPos.clone().sub(near.point);
+  if(n.length()<1e-4){
+    const rel=vIn.clone().sub(vBat);
+    n=rel.clone().sub(pose.dir.clone().multiplyScalar(rel.dot(pose.dir)));
+    if(n.length()<1e-4)n=new THREE.Vector3(0,1,0);
   }
+  n.normalize();
+  const rel=vIn.clone().sub(vBat);
+  if(rel.dot(n)>0)n.negate();
+  const vn=rel.dot(n);
+  const restitution=.52;
+  let out=vIn.clone().addScaledVector(n,-(1+restitution)*vn);
+  const tangentBat=vBat.clone().sub(n.clone().multiplyScalar(vBat.dot(n)));
+  out.addScaledVector(tangentBat,.15);
 
-  const power=tf*loc.cap;
-  const pts=Math.round(100*power);
-  S.score+=pts;ui.score.textContent=String(S.score).padStart(4,'0');
-  beginBattedBall(now,p,power,m.signedVertical);
-  ui.result.innerHTML='HIT<small>'+pts+' PTS · POWER '+Math.round(power*100)+'% · Δ '+Math.round(timingErrorMs)+'ms · LAUNCH '+Math.round(S.batted.launchDeg)+'°</small>';
-  ui.result.classList.add('on');setTimeout(()=>ui.result.classList.remove('on'),950);
-  ui.contact.style.width=Math.round(tf*100)+'%';
-  ui.power.style.width=Math.round(loc.cap*100)+'%';
+  const timingError=ms-idealImpactTimeMs();
+  const tf=timingFactor(timingError);
+  const loc=locationCap(S.pitch.target);
+  const sweet=.84+.16*(1-Math.min(1,Math.abs(near.t-.55)/.55));
+  const power=tf*loc.cap*sweet;
+
+  const verticalOffset=ballPos.y-near.point.y;
+  const sprayDeg=clamp((ballPos.z-PLATE_FRONT)*78,-40,40);
+  const launchDeg=clamp(12+(verticalOffset/COLLISION_RADIUS)*26,-16,44);
+  const spray=THREE.MathUtils.degToRad(sprayDeg),launch=THREE.MathUtils.degToRad(launchDeg);
+  const desired=new THREE.Vector3(
+    Math.sin(spray)*Math.cos(launch),
+    Math.sin(launch),
+    Math.cos(spray)*Math.cos(launch)
+  ).normalize();
+
+  if(!Number.isFinite(out.length())||out.length()<1||out.z<1){
+    out.copy(desired);
+  }else{
+    out.normalize().multiplyScalar(.62).addScaledVector(desired,.38).normalize();
+  }
+  const speed=20+30*power;
+  out.multiplyScalar(speed);
+  return{out,vIn,vBat,power,tf,loc,sweet,timingError,verticalOffset,sprayDeg,launchDeg};
 }
+function setBattedTrail(points){
+  battedTrail.geometry.dispose();
+  battedTrail.geometry=new THREE.BufferGeometry().setFromPoints(points);
+}
+function beginPhysicalBattedBall(ms,ballPos,near,physics){
+  const surfaceContact=near.point.clone().lerp(ballPos,.5);
+  contactMarker.position.copy(surfaceContact);contactMarker.visible=true;
+  S.contactMarkerUntil=Infinity;
 
+  S.batted={
+    t0:ms,start:ballPos.clone(),velocity:physics.out.clone(),power:physics.power,
+    sprayDeg:THREE.MathUtils.radToDeg(Math.atan2(physics.out.x,physics.out.z)),
+    launchDeg:THREE.MathUtils.radToDeg(Math.atan2(physics.out.y,Math.hypot(physics.out.x,physics.out.z))),
+    points:[ballPos.clone()]
+  };
+  battedBall.position.copy(ballPos);battedBall.visible=true;
+  setBattedTrail(S.batted.points);battedTrail.visible=true;
+  ball.visible=false;for(const t of trail)t.visible=false;
+  S.phase='batted';S.locked=true;S.swing=null;
+  showPlateMarker();
+
+  const pts=Math.round(100*physics.power);
+  S.score+=pts;ui.score.textContent=String(S.score).padStart(4,'0');
+  ui.contact.style.width=Math.round(physics.tf*100)+'%';
+  ui.power.style.width=Math.round(physics.loc.cap*100)+'%';
+  const batSpeed=physics.vBat.length();
+  const exitSpeed=physics.out.length();
+  ui.result.innerHTML='HIT<small>'+pts+' PTS · POWER '+Math.round(physics.power*100)+'% · Δ '+Math.round(physics.timingError)+'ms · EXIT '+exitSpeed.toFixed(1)+'m/s</small>';
+  ui.result.classList.add('on');setTimeout(()=>ui.result.classList.remove('on'),1050);
+  impactStatus.textContent='CONTACT x '+ballPos.x.toFixed(2)+' / y '+ballPos.y.toFixed(2)+' / z '+ballPos.z.toFixed(2)+' · bat '+batSpeed.toFixed(1)+'m/s · spray '+Math.round(S.batted.sprayDeg)+'° · launch '+Math.round(S.batted.launchDeg)+'°';
+}
+function scanSwingCollision(now){
+  const sw=S.swing;
+  if(!sw||!S.pitch)return false;
+  const end=Math.min(now,sw.start+sw.delay+FOLLOW_THROUGH_MS);
+  let from=Math.max(sw.lastCheck,sw.start);
+  if(end<from)return false;
+  const step=3;
+  for(let ms=from;ms<=end+.01;ms+=step){
+    const pose=swingPoseAt(ms,sw);
+    const seg=sweetSegment(pose);
+    const bp=ballAtMs(ms);
+    const near=closestOnSegment(bp,seg.a,seg.b);
+    const timingError=ms-idealImpactTimeMs();
+    if(near.distance<sw.closestDist){
+      sw.closestDist=near.distance;sw.closestTime=ms;sw.closestTiming=timingError;
+    }
+    if(near.distance<=COLLISION_RADIUS&&Math.abs(timingError)<TIMING_MISS_MS&&locationCap(S.pitch.target).reachable){
+      const physics=physicalExitVelocity(ms,sw,bp,near);
+      beginPhysicalBattedBall(ms,bp,near,physics);
+      return true;
+    }
+  }
+  sw.lastCheck=end;
+  return false;
+}
+function finishSwingMiss(){
+  if(!S.swing)return;
+  const sw=S.swing;
+  const timing=Math.round(sw.closestTiming??(performance.now()-idealImpactTimeMs()));
+  const dist=Number.isFinite(sw.closestDist)?Math.round(sw.closestDist*1000):999;
+  ui.result.innerHTML='MISS<small>closest '+dist+'mm · timing Δ '+timing+'ms</small>';
+  ui.result.classList.add('on');setTimeout(()=>ui.result.classList.remove('on'),900);
+  impactStatus.textContent='NO CONTACT · closest '+dist+'mm · timing Δ '+timing+'ms';
+  S.swing=null;S.phase='missed';S.locked=true;
+}
 function swing(now){
   if(S.phase!=='pitching'||S.locked||S.swing)return;
-  S.swingStarted=now;
-  S.swing={start:now,impactAt:now+SWING_TO_IMPACT_MS,aim:S.aimWorld.clone()};
+  const bundle=swingPoseBundle(S.aimWorld.x,S.aimWorld.y);
+  const sw={
+    start:now,delay:Number(dev.swingDelay)||0,bundle,lastCheck:now,
+    closestDist:Infinity,closestTime:now,closestTiming:0
+  };
+  S.swing=sw;S.visualSwing={...sw};
   S.phase='swinging';S.locked=true;
 }
 
