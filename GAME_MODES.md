@@ -2,7 +2,7 @@
 
 Current player-facing prototypes:
 
-- `modes.html` — mode selection.
+- `modes.html` — player-facing mode selection.
 - `game.html?mode=score` — 10-pitch Score Attack.
 - `game.html?mode=target` — Target Challenge.
 - `game.html?mode=survival` — 3-Out Survival.
@@ -15,6 +15,8 @@ The player modes intentionally reuse the current 3D swing/contact model from the
 Auto-pitch cadence is readiness-based: after a hit, the camera may track the batted ball and return to the batting view; only once control is available again does the 3-second next-pitch countdown begin. Miss/take paths also enter the same ready/wait state before the next countdown.
 
 The player build does not reveal pitch type, course, or flight time before/during a pitch. The center header is reserved for neutral state feedback such as pitch number, hit tracking, and the next-pitch countdown.
+
+The mode menu is intentionally simple: Score Attack is presented as the recommended first mode, all three local best scores are visible before selection, and the developer playtest is visually separated in the footer.
 
 ## 1. 10-pitch Score Attack
 
@@ -36,7 +38,7 @@ The player build does not reveal pitch type, course, or flight time before/durin
 - Target cycles through PULL → CENTER → OPPOSITE.
 - A normal hit earns its contact score.
 - Correct direction adds +100; an incorrect direction still keeps the normal contact score.
-- A field ring and HUD label visualize the requested direction.
+- A field ring and Japanese HUD label visualize the requested direction.
 - Hit feedback explicitly reports TARGET +100 or TARGET MISS.
 - Local best score is stored.
 
@@ -81,4 +83,8 @@ Avoid:
 - banners covering the 3D batting viewport,
 - paid/rewarded bonuses that mix into the same competitive leaderboard.
 
-`game.html` dispatches a `batting:session-end` browser event as a clean future integration point. No ad provider is wired into the prototype.
+Integration hooks currently exist without an ad provider:
+- `modes.html` contains a hidden `MENU_AD_SLOT` and dispatches `batting:menu-ready`.
+- `game.html` contains a hidden result ad slot and dispatches `batting:session-end` with mode/session summary data.
+
+A future provider should attach to those menu/result surfaces only; active batting should remain uninterrupted.
