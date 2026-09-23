@@ -187,7 +187,7 @@ const RULES={
 const rule=RULES[MODE]||RULES.score;
 const targetCycle=['PULL','CENTER','OPPOSITE'];
 const TARGET_LABEL={PULL:'引っ張り',CENTER:'センター',OPPOSITE:'逆方向'};
-let session={score:0,hits:0,misses:0,outs:0,combo:0,bestCombo:0,targetHits:0,ended:false,currentTarget:null};
+let session={score:0,hits:0,misses:0,fouls:0,outs:0,combo:0,bestCombo:0,targetHits:0,ended:false,currentTarget:null};
 
 function targetForPitch(n){return targetCycle[(n-1)%targetCycle.length]}
 function sprayMatchesTarget(deg,target){
@@ -248,10 +248,10 @@ function endSession(){
   document.getElementById('endTitle').textContent=rule.title;
   document.getElementById('endScore').textContent=session.score+' PTS';
   const detail=rule.key==='survival'
-    ?'PITCHES '+S.n+' · HITS '+session.hits+' · BEST COMBO '+session.bestCombo+' · BEST '+best
+    ?'PITCHES '+S.n+' · HITS '+session.hits+' · FOUL '+session.fouls+' · BEST COMBO '+session.bestCombo+' · BEST '+best
     :rule.key==='target'
-      ?'TARGET '+session.targetHits+'/'+rule.limit+' · HITS '+session.hits+' · MISS '+session.misses+' · BEST '+best
-      :'HITS '+session.hits+'/'+rule.limit+' · MISS '+session.misses+' · BEST '+best;
+      ?'TARGET '+session.targetHits+'/'+rule.limit+' · HITS '+session.hits+' · FOUL '+session.fouls+' · MISS '+session.misses+' · BEST '+best
+      :'HITS '+session.hits+'/'+rule.limit+' · FOUL '+session.fouls+' · MISS '+session.misses+' · BEST '+best;
   document.getElementById('endMeta').textContent=detail;
   document.getElementById('sessionEnd').classList.add('on');
   // Future ad/analytics integration point. No ad is shown in the prototype.
@@ -278,6 +278,11 @@ function registerHit(physics,batted){
   updateSessionHud();
   return{gained,label};
 }
+function registerFoul(){
+  session.fouls++;session.combo=0;
+  if(rule.key==='target')targetFieldMarker.material.color.setHex(0xf4d15d);
+  updateSessionHud();
+}
 function registerFailure(kind){
   session.misses++;session.combo=0;
   let label='';
@@ -290,7 +295,7 @@ function registerFailure(kind){
   return label;
 }
 function resetSession(){
-  session={score:0,hits:0,misses:0,outs:0,combo:0,bestCombo:0,targetHits:0,ended:false,currentTarget:null};
+  session={score:0,hits:0,misses:0,fouls:0,outs:0,combo:0,bestCombo:0,targetHits:0,ended:false,currentTarget:null};
   document.getElementById('sessionEnd').classList.remove('on');
   renderModeUI();
 }
@@ -299,7 +304,11 @@ const INTERVAL_MS=3000;
 const ZONE_LOW=.52,ZONE_HIGH=1.16;
 const REACH_X=.17,REACH_Y=.18;
 const IMPACT_SLOPE=1.18;
-const TIMING_MISS_MS=90;
+const PLAYER_TIMING_EARLY_MS=150;
+const PLAYER_TIMING_LATE_MS=150;
+const FAIR_TIMING_RATIO=.68;
+const FOUL_LINE_DEG=45;
+const FOUL_MAX_DEG=68;
 const BAT_LENGTH=.864; // 34 in adult bat
 const BAT_BARREL_RADIUS=.033; // ~2.6 in max diameter
 const BAT_HANDLE_RADIUS=.014;
@@ -737,10 +746,23 @@ function showPlateMarker(){
   plateCrossMarker.visible=true;
   S.markerShown=true;
 }
+function timingLimit(errorMs){
+  return errorMs<0?PLAYER_TIMING_EARLY_MS:PLAYER_TIMING_LATE_MS;
+}
+function timingContactAllowed(errorMs){
+  return Math.abs(errorMs)<timingLimit(errorMs);
+}
 function timingFactor(errorMs){
-  const a=Math.abs(errorMs);
-  if(a>=TIMING_MISS_MS)return 0;
-  return 1-Math.pow(a/TIMING_MISS_MS,1.45);
+  const ratio=clamp(Math.abs(errorMs)/timingLimit(errorMs),0,1);
+  return 1-.70*Math.pow(ratio,1.35);
+}
+function timingFoul(errorMs){
+  const limit=timingLimit(errorMs);
+  const ratio=Math.abs(errorMs)/limit;
+  if(ratio<=FAIR_TIMING_RATIO)return{isFoul:false,side:null,angle:null};
+  const t=clamp((ratio-FAIR_TIMING_RATIO)/(1-FAIR_TIMING_RATIO),0,1);
+  const angle=FOUL_LINE_DEG+2+(FOUL_MAX_DEG-FOUL_LINE_DEG-2)*t;
+  return{isFoul:true,side:errorMs<0?'THIRD':'FIRST',angle:(errorMs<0?1:-1)*angle};
 }
 function closestOnSegment(p,a,b){
   const ab=b.clone().sub(a);
@@ -805,7 +827,8 @@ function physicalExitVelocity(ms,sw,ballPos,near){
   const power=tf*loc.cap*sweet;
 
   const verticalOffset=ballPos.y-near.point.y;
-  const sprayDeg=clamp((ballPos.z-PLATE_FRONT)*78,-40,40);
+  const foul=timingFoul(timingError);
+  const sprayDeg=foul.isFoul?foul.angle:clamp((ballPos.z-PLATE_FRONT)*78,-40,40);
   const launchDeg=clamp(12+(verticalOffset/COLLISION_RADIUS)*26,-16,44);
   const spray=THREE.MathUtils.degToRad(sprayDeg),launch=THREE.MathUtils.degToRad(launchDeg);
   const desired=new THREE.Vector3(
@@ -814,14 +837,16 @@ function physicalExitVelocity(ms,sw,ballPos,near){
     Math.cos(spray)*Math.cos(launch)
   ).normalize();
 
-  if(!Number.isFinite(out.length())||out.length()<1||out.z<1){
+  if(foul.isFoul){
+    out.copy(desired);
+  }else if(!Number.isFinite(out.length())||out.length()<1||out.z<1){
     out.copy(desired);
   }else{
     out.normalize().multiplyScalar(.62).addScaledVector(desired,.38).normalize();
   }
   const speed=20+30*power;
   out.multiplyScalar(speed);
-  return{out,vIn,vBat,power,tf,loc,sweet,timingError,verticalOffset,sprayDeg,launchDeg};
+  return{out,vIn,vBat,power,tf,loc,sweet,timingError,verticalOffset,sprayDeg,launchDeg,isFoul:foul.isFoul,foulSide:foul.side};
 }
 function setBattedTrail(points){
   battedTrail.geometry.dispose();
@@ -846,6 +871,7 @@ function beginPhysicalBattedBall(ms,ballPos,near,physics){
     t0:ms,start:ballPos.clone(),velocity:physics.out.clone(),power:physics.power,
     sprayDeg:THREE.MathUtils.radToDeg(Math.atan2(physics.out.x,physics.out.z)),
     launchDeg:THREE.MathUtils.radToDeg(Math.atan2(physics.out.y,Math.hypot(physics.out.x,physics.out.z))),
+    isFoul:physics.isFoul,foulSide:physics.foulSide,
     points:[ballPos.clone()]
   };
   battedBall.position.copy(ballPos);battedBall.visible=true;
@@ -860,12 +886,20 @@ function beginPhysicalBattedBall(ms,ballPos,near,physics){
   };
   showPlateMarker();
 
-  const award=registerHit(physics,S.batted);
+  let resultHtml;
+  if(physics.isFoul){
+    registerFoul();
+    const side=physics.foulSide==='THIRD'?'3B SIDE':'1B SIDE';
+    resultHtml='FOUL<small>'+side+' · '+(physics.timingError<0?'EARLY':'LATE')+'</small>';
+  }else{
+    const award=registerHit(physics,S.batted);
+    resultHtml='HIT<small>+'+award.gained+' PTS'+award.label+' · POWER '+Math.round(physics.power*100)+'%</small>';
+  }
   ui.contact.style.width=Math.round(physics.tf*100)+'%';
   ui.power.style.width=Math.round(physics.loc.cap*100)+'%';
   const batSpeed=physics.vBat.length();
   const exitSpeed=physics.out.length();
-  ui.result.innerHTML='HIT<small>+'+award.gained+' PTS'+award.label+' · POWER '+Math.round(physics.power*100)+'%</small>';
+  ui.result.innerHTML=resultHtml;
   ui.result.classList.add('on');setTimeout(()=>ui.result.classList.remove('on'),1050);
   impactStatus.textContent='CONTACT x '+ballPos.x.toFixed(2)+' / y '+ballPos.y.toFixed(2)+' / z '+ballPos.z.toFixed(2)+' · bat '+batSpeed.toFixed(1)+'m/s · spray '+Math.round(S.batted.sprayDeg)+'° · launch '+Math.round(S.batted.launchDeg)+'°';
 }
@@ -885,7 +919,7 @@ function scanSwingCollision(now){
     if(near.distance<sw.closestDist){
       sw.closestDist=near.distance;sw.closestTime=ms;sw.closestTiming=timingError;
     }
-    if(near.distance<=COLLISION_RADIUS&&Math.abs(timingError)<TIMING_MISS_MS&&locationCap(S.pitch.target).reachable){
+    if(near.distance<=COLLISION_RADIUS&&timingContactAllowed(timingError)&&locationCap(S.pitch.target).reachable){
       const physics=physicalExitVelocity(ms,sw,bp,near);
       beginPhysicalBattedBall(ms,bp,near,physics);
       return true;
