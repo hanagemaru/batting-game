@@ -113,11 +113,21 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
           <input id="swingSpeed" type="range" min="1" max="4" step="0.25" value="2"><output>2.00x</output>
         </div>
       </label>
+      <label class="devField">Timing EARLY
+        <div class="ctrl" style="grid-template-columns:1fr 48px">
+          <input id="timingEarly" type="range" min="80" max="260" step="10" value="150"><output>150ms</output>
+        </div>
+      </label>
+      <label class="devField">Timing LATE
+        <div class="ctrl" style="grid-template-columns:1fr 48px">
+          <input id="timingLate" type="range" min="80" max="260" step="10" value="150"><output>150ms</output>
+        </div>
+      </label>
     </div>
     <div class="calActions"><button id="throwNow">THROW NOW</button><button id="autoBtn">AUTO: ON / 3s</button></div>
     <div id="devStatus" class="devStatus">AUTO投球: 3.0秒間隔</div>
     <div id="impactStatus" class="devStatus">CONTACT: —</div>
-    <div class="devNote">INSIDE = 右打者に近い三塁側（+X）、OUTSIDE = 一塁側（−X）。BALL系はゾーン外を検証します。<br>STRIKE PLANEはカーソルをホームベース前端のストライクゾーン面に表示し、IMPACT SURFACEはコースごとの標準インパクト面に表示します。物理判定はどちらも同じ3Dスイングモデルです。Swing delayはスイング開始前の待ち時間、Swing speedは実際のバット移動速度です。</div>
+    <div class="devNote">INSIDE = 右打者に近い三塁側（+X）、OUTSIDE = 一塁側（−X）。BALL系はゾーン外を検証します。<br>STRIKE PLANEはカーソルをホームベース前端のストライクゾーン面に表示し、IMPACT SURFACEはコースごとの標準インパクト面に表示します。物理判定はどちらも同じ3Dスイングモデルです。Swing delayはスイング開始前の待ち時間、Swing speedは実際のバット移動速度です。Timing EARLY / LATE は理想インパクトから前後どこまでコンタクト可能かを別々に調整します。外側約3割はFOUL領域です。</div>
 
     <h2>BATTER CAMERA CALIBRATION</h2>
     <div class="grid">
@@ -164,7 +174,11 @@ const INTERVAL_MS=3000;
 const ZONE_LOW=.52,ZONE_HIGH=1.16;
 const REACH_X=.17,REACH_Y=.18;
 const IMPACT_SLOPE=1.18;
-const TIMING_MISS_MS=90;
+const DEFAULT_TIMING_EARLY_MS=150;
+const DEFAULT_TIMING_LATE_MS=150;
+const FAIR_TIMING_RATIO=.68;
+const FOUL_LINE_DEG=45;
+const FOUL_MAX_DEG=68;
 const BAT_LENGTH=.864; // 34 in adult bat
 const BAT_BARREL_RADIUS=.033; // ~2.6 in max diameter
 const BAT_HANDLE_RADIUS=.014;
@@ -304,15 +318,17 @@ try{Object.assign(cfg,JSON.parse(localStorage.getItem(STORAGE)||'{}'))}catch(e){
 for(const id of controlsIds){ctl[id].value=cfg[id]}
 
 const DEV_STORAGE='batting-impact-dev-v2';
-const dev={pitchMode:'RANDOM',courseMode:'RANDOM',cursorPlane:'STRIKE',swingDelay:0,swingSpeed:2,auto:true};
+const dev={pitchMode:'RANDOM',courseMode:'RANDOM',cursorPlane:'STRIKE',swingDelay:0,swingSpeed:2,timingEarly:DEFAULT_TIMING_EARLY_MS,timingLate:DEFAULT_TIMING_LATE_MS,auto:true};
 try{Object.assign(dev,JSON.parse(localStorage.getItem(DEV_STORAGE)||'{}'))}catch(e){}
-const pitchMode=document.getElementById('pitchMode'),courseMode=document.getElementById('courseMode'),cursorPlane=document.getElementById('cursorPlane'),swingDelay=document.getElementById('swingDelay'),swingSpeed=document.getElementById('swingSpeed'),autoBtn=document.getElementById('autoBtn'),devStatus=document.getElementById('devStatus'),impactStatus=document.getElementById('impactStatus');
+const pitchMode=document.getElementById('pitchMode'),courseMode=document.getElementById('courseMode'),cursorPlane=document.getElementById('cursorPlane'),swingDelay=document.getElementById('swingDelay'),swingSpeed=document.getElementById('swingSpeed'),timingEarly=document.getElementById('timingEarly'),timingLate=document.getElementById('timingLate'),autoBtn=document.getElementById('autoBtn'),devStatus=document.getElementById('devStatus'),impactStatus=document.getElementById('impactStatus');
 function saveDev(){try{localStorage.setItem(DEV_STORAGE,JSON.stringify(dev))}catch(e){}}
 function syncDevUI(){
   autoBtn.textContent=dev.auto?'AUTO: ON / 3s':'AUTO: OFF';
   pitchMode.value=dev.pitchMode;courseMode.value=dev.courseMode;cursorPlane.value=dev.cursorPlane;
   swingDelay.value=dev.swingDelay;swingDelay.nextElementSibling.value=Math.round(dev.swingDelay)+'ms';
   swingSpeed.value=dev.swingSpeed;swingSpeed.nextElementSibling.value=Number(dev.swingSpeed).toFixed(2)+'x';
+  timingEarly.value=dev.timingEarly;timingEarly.nextElementSibling.value=Math.round(dev.timingEarly)+'ms';
+  timingLate.value=dev.timingLate;timingLate.nextElementSibling.value=Math.round(dev.timingLate)+'ms';
 }
 syncDevUI();
 
@@ -570,10 +586,23 @@ function showPlateMarker(){
   plateCrossMarker.visible=true;
   S.markerShown=true;
 }
+function timingLimit(errorMs){
+  return errorMs<0?Number(dev.timingEarly)||DEFAULT_TIMING_EARLY_MS:Number(dev.timingLate)||DEFAULT_TIMING_LATE_MS;
+}
+function timingContactAllowed(errorMs){
+  return Math.abs(errorMs)<timingLimit(errorMs);
+}
 function timingFactor(errorMs){
-  const a=Math.abs(errorMs);
-  if(a>=TIMING_MISS_MS)return 0;
-  return 1-Math.pow(a/TIMING_MISS_MS,1.45);
+  const ratio=clamp(Math.abs(errorMs)/timingLimit(errorMs),0,1);
+  return 1-.70*Math.pow(ratio,1.35);
+}
+function timingFoul(errorMs){
+  const limit=timingLimit(errorMs);
+  const ratio=Math.abs(errorMs)/limit;
+  if(ratio<=FAIR_TIMING_RATIO)return{isFoul:false,side:null,angle:null};
+  const t=clamp((ratio-FAIR_TIMING_RATIO)/(1-FAIR_TIMING_RATIO),0,1);
+  const angle=FOUL_LINE_DEG+2+(FOUL_MAX_DEG-FOUL_LINE_DEG-2)*t;
+  return{isFoul:true,side:errorMs<0?'THIRD':'FIRST',angle:(errorMs<0?1:-1)*angle};
 }
 function closestOnSegment(p,a,b){
   const ab=b.clone().sub(a);
@@ -638,7 +667,8 @@ function physicalExitVelocity(ms,sw,ballPos,near){
   const power=tf*loc.cap*sweet;
 
   const verticalOffset=ballPos.y-near.point.y;
-  const sprayDeg=clamp((ballPos.z-PLATE_FRONT)*78,-40,40);
+  const foul=timingFoul(timingError);
+  const sprayDeg=foul.isFoul?foul.angle:clamp((ballPos.z-PLATE_FRONT)*78,-40,40);
   const launchDeg=clamp(12+(verticalOffset/COLLISION_RADIUS)*26,-16,44);
   const spray=THREE.MathUtils.degToRad(sprayDeg),launch=THREE.MathUtils.degToRad(launchDeg);
   const desired=new THREE.Vector3(
@@ -647,14 +677,18 @@ function physicalExitVelocity(ms,sw,ballPos,near){
     Math.cos(spray)*Math.cos(launch)
   ).normalize();
 
-  if(!Number.isFinite(out.length())||out.length()<1||out.z<1){
+  if(foul.isFoul){
+    // Extreme timing contact should visibly cross the foul line rather than
+    // getting blended back into fair territory by the collision vector.
+    out.copy(desired);
+  }else if(!Number.isFinite(out.length())||out.length()<1||out.z<1){
     out.copy(desired);
   }else{
     out.normalize().multiplyScalar(.62).addScaledVector(desired,.38).normalize();
   }
   const speed=20+30*power;
   out.multiplyScalar(speed);
-  return{out,vIn,vBat,power,tf,loc,sweet,timingError,verticalOffset,sprayDeg,launchDeg};
+  return{out,vIn,vBat,power,tf,loc,sweet,timingError,verticalOffset,sprayDeg,launchDeg,isFoul:foul.isFoul,foulSide:foul.side};
 }
 function setBattedTrail(points){
   battedTrail.geometry.dispose();
@@ -679,6 +713,7 @@ function beginPhysicalBattedBall(ms,ballPos,near,physics){
     t0:ms,start:ballPos.clone(),velocity:physics.out.clone(),power:physics.power,
     sprayDeg:THREE.MathUtils.radToDeg(Math.atan2(physics.out.x,physics.out.z)),
     launchDeg:THREE.MathUtils.radToDeg(Math.atan2(physics.out.y,Math.hypot(physics.out.x,physics.out.z))),
+    isFoul:physics.isFoul,foulSide:physics.foulSide,
     points:[ballPos.clone()]
   };
   battedBall.position.copy(ballPos);battedBall.visible=true;
@@ -693,13 +728,16 @@ function beginPhysicalBattedBall(ms,ballPos,near,physics){
   };
   showPlateMarker();
 
-  const pts=Math.round(100*physics.power);
-  S.score+=pts;ui.score.textContent=String(S.score).padStart(4,'0');
+  const pts=physics.isFoul?0:Math.round(100*physics.power);
+  if(!physics.isFoul)S.score+=pts;
+  ui.score.textContent=String(S.score).padStart(4,'0');
   ui.contact.style.width=Math.round(physics.tf*100)+'%';
   ui.power.style.width=Math.round(physics.loc.cap*100)+'%';
   const batSpeed=physics.vBat.length();
   const exitSpeed=physics.out.length();
-  ui.result.innerHTML='HIT<small>'+pts+' PTS · POWER '+Math.round(physics.power*100)+'% · Δ '+Math.round(physics.timingError)+'ms · EXIT '+exitSpeed.toFixed(1)+'m/s</small>';
+  const resultLabel=physics.isFoul?'FOUL':'HIT';
+  const sideLabel=physics.isFoul?(physics.foulSide==='THIRD'?'3B SIDE':'1B SIDE')+' · ':'';
+  ui.result.innerHTML=resultLabel+'<small>'+sideLabel+pts+' PTS · POWER '+Math.round(physics.power*100)+'% · Δ '+Math.round(physics.timingError)+'ms · EXIT '+exitSpeed.toFixed(1)+'m/s</small>';
   ui.result.classList.add('on');setTimeout(()=>ui.result.classList.remove('on'),1050);
   impactStatus.textContent='CONTACT x '+ballPos.x.toFixed(2)+' / y '+ballPos.y.toFixed(2)+' / z '+ballPos.z.toFixed(2)+' · bat '+batSpeed.toFixed(1)+'m/s · spray '+Math.round(S.batted.sprayDeg)+'° · launch '+Math.round(S.batted.launchDeg)+'°';
 }
@@ -719,7 +757,7 @@ function scanSwingCollision(now){
     if(near.distance<sw.closestDist){
       sw.closestDist=near.distance;sw.closestTime=ms;sw.closestTiming=timingError;
     }
-    if(near.distance<=COLLISION_RADIUS&&Math.abs(timingError)<TIMING_MISS_MS&&locationCap(S.pitch.target).reachable){
+    if(near.distance<=COLLISION_RADIUS&&timingContactAllowed(timingError)&&locationCap(S.pitch.target).reachable){
       const physics=physicalExitVelocity(ms,sw,bp,near);
       beginPhysicalBattedBall(ms,bp,near,physics);
       return true;
@@ -789,6 +827,8 @@ courseMode.onchange=()=>{dev.courseMode=courseMode.value;saveDev();syncDevUI()};
 cursorPlane.onchange=()=>{dev.cursorPlane=cursorPlane.value;saveDev();syncDevUI()};
 swingDelay.oninput=()=>{dev.swingDelay=Number(swingDelay.value);saveDev();syncDevUI()};
 swingSpeed.oninput=()=>{dev.swingSpeed=Number(swingSpeed.value);saveDev();syncDevUI()};
+timingEarly.oninput=()=>{dev.timingEarly=Number(timingEarly.value);saveDev();syncDevUI()};
+timingLate.oninput=()=>{dev.timingLate=Number(timingLate.value);saveDev();syncDevUI()};
 autoBtn.onclick=()=>{
   dev.auto=!dev.auto;saveDev();syncDevUI();
   if(dev.auto&&S.phase==='waiting'&&ui.start.style.display==='none')armNextPitch(performance.now());
