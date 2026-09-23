@@ -88,3 +88,21 @@ Integration hooks currently exist without an ad provider:
 - `game.html` contains a hidden result ad slot and dispatches `batting:session-end` with mode/session summary data.
 
 A future provider should attach to those menu/result surfaces only; active batting should remain uninterrupted.
+
+
+## Timing / foul model
+
+The current player default contact window is wider than the original prototype:
+
+- EARLY side: 150 ms from the ideal impact time.
+- LATE side: 150 ms from the ideal impact time.
+- These are separate parameters in `playtest-impact.html` and can be tuned independently from 80–260 ms.
+- Timing power falls progressively toward either edge instead of dropping immediately to zero.
+- The outer ~32% of each timing window is a contactable foul region rather than an automatic miss.
+- For a right-handed batter:
+  - very early contact is forced beyond the third-base foul line,
+  - very late contact is forced beyond the first-base foul line.
+- Foul balls score 0 and reset Survival combo, but do not count as an out.
+- Target Challenge treats a foul as neither a successful target hit nor a normal fair hit.
+
+The player build currently mirrors the tuning prototype at 150 ms / 150 ms; once the preferred values are settled, these defaults should stay synchronized.
