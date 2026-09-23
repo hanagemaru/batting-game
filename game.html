@@ -256,7 +256,7 @@ function endSession(){
   document.getElementById('sessionEnd').classList.add('on');
   // Future ad/analytics integration point. No ad is shown in the prototype.
   window.dispatchEvent(new CustomEvent('batting:session-end',{detail:{
-    mode:rule.key,score:session.score,hits:session.hits,outs:session.outs,bestCombo:session.bestCombo
+    mode:rule.key,score:session.score,hits:session.hits,fouls:session.fouls,outs:session.outs,bestCombo:session.bestCombo
   }}));
 }
 function registerHit(physics,batted){
