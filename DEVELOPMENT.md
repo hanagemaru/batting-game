@@ -81,7 +81,7 @@ The playable prototype intentionally keeps a temporary CALIBRATE panel so eye po
 ## Impact-model comparison prototype
 
 - `playtest-impact.html`: alternate batting model prototype.
-- Cursor is a translucent barrel/sweet-spot segment on a slanted standard impact surface, not on the strike-zone plane.
+- Cursor is a translucent barrel/sweet-spot segment; current v2 can display it either on the strike-zone plane or on the slanted standard impact surface.
 - Standard impact depth moves pitcher-side for inside pitches and catcher-side for outside pitches.
 - Releasing starts the swing; bat reaches impact about 100 ms later.
 - Timing error reduces power and eventually becomes a miss.
@@ -118,3 +118,45 @@ Current `playtest-impact.html` now tests the following alternatives:
 - A hit temporarily turns the camera toward the pitcher/outfield direction, then returns to the calibrated batting view.
 - The 3-second auto-pitch countdown starts only after the batting view has returned and player input is available again.
 - Batted-ball flight continues independently while the player becomes ready for the next pitch.
+
+
+## Current checkpoint — contact difficulty and visual/physical alignment
+
+Latest tuning state:
+
+- Contact timing was widened from the original ±90 ms hard window.
+- Current default:
+  - EARLY: 150 ms
+  - LATE: 150 ms
+- EARLY / LATE timing limits are independently adjustable in `playtest-impact.html` from 80–260 ms.
+- Timing error now reduces power progressively instead of immediately becoming a miss.
+- The outer ~32% of the timing window becomes foul territory:
+  - right-handed batter, too early → third-base-side foul,
+  - right-handed batter, too late → first-base-side foul.
+- Fouls are rendered as actual batted-ball trajectories.
+- Player modes mirror the current 150 ms / 150 ms defaults.
+
+Important issue found during mobile playtest:
+
+- A recent miss showed:
+  - `closest 89 mm`
+  - `timing Δ -9 ms`
+- Timing was effectively ideal; the miss occurred because the current physical collision radius is about 78.5 mm:
+  - bat radius 33 mm
+  - ball radius 36.5 mm
+  - extra collision margin 9 mm
+- Therefore the closest approach missed by roughly 10.5 mm.
+- Visually, however, the translucent barrel cursor and the pitch-location marker appeared to overlap strongly.
+- This creates a poor player-facing explanation: the screen suggests "this should be contact" while the 3D swept-bat collision still reports a miss.
+
+Current interpretation:
+
+- The next difficulty problem is not primarily timing.
+- Spatial collision / cursor representation is now likely the dominant source of perceived unfairness.
+- Do not simply keep widening timing until this is resolved.
+- Next investigation should make the displayed green barrel/contact region match the actual 3D contactable volume more closely, or otherwise visualize why a swing misses.
+- The displayed post-pitch diagnostics currently mean:
+  - `closest N mm`: minimum 3D distance from ball center to the bat sweet-spot segment during the swing.
+  - `timing Δ N ms`: actual closest/contact timing relative to the course-dependent ideal impact time.
+  - `TIMING`: timing-quality factor.
+  - `MAX POWER`: location-based maximum power cap.
