@@ -279,13 +279,39 @@ handA.position.y=.030;handB.position.y=.090;
 worldBat.add(handA,handB);
 scene.add(worldBat);
 
-// Ghost barrel = aiming cursor. Its display plane is switchable in the dev panel.
+// A/B aiming preview uses the SAME sweet-spot segment as the collision scanner.
+// The green envelope is the allowed distance from BALL CENTER to the segment.
 const cursorBarrel=new THREE.Mesh(
-  new THREE.CapsuleGeometry(.045,.28,5,12),
-  new THREE.MeshStandardMaterial({color:0x8de7b1,transparent:true,opacity:.58,emissive:0x173f2b,depthTest:false})
+  new THREE.CapsuleGeometry(COLLISION_RADIUS,SWEET_END-SWEET_START,8,16),
+  new THREE.MeshBasicMaterial({color:0x8de7b1,transparent:true,opacity:.25,depthTest:true,depthWrite:false})
 );
-cursorBarrel.renderOrder=4;
-scene.add(cursorBarrel);
+cursorBarrel.renderOrder=3;scene.add(cursorBarrel);
+const cursorCore=new THREE.Mesh(
+  new THREE.CapsuleGeometry(BAT_RADIUS,SWEET_END-SWEET_START,6,12),
+  new THREE.MeshBasicMaterial({color:0xd4ffe4,transparent:true,opacity:.70,depthTest:true,depthWrite:false})
+);
+cursorCore.renderOrder=4;scene.add(cursorCore);
+// B: sampled surface swept by the same moving sweet segment that is collision-tested.
+const swingRibbon=new THREE.Mesh(
+  new THREE.BufferGeometry(),
+  new THREE.MeshBasicMaterial({color:0x8de7b1,transparent:true,opacity:.27,side:THREE.DoubleSide,depthTest:true,depthWrite:false})
+);
+swingRibbon.renderOrder=2;scene.add(swingRibbon);
+const swingCenterLine=new THREE.Line(
+  new THREE.BufferGeometry(),
+  new THREE.LineBasicMaterial({color:0xd2ffe5,transparent:true,opacity:.9,depthTest:true,depthWrite:false})
+);
+scene.add(swingCenterLine);
+const earlyMarker=new THREE.Mesh(
+  new THREE.SphereGeometry(.020,12,8),
+  new THREE.MeshBasicMaterial({color:0x75bfff,transparent:true,opacity:.85,depthTest:true,depthWrite:false})
+);
+const lateMarker=new THREE.Mesh(
+  new THREE.SphereGeometry(.020,12,8),
+  new THREE.MeshBasicMaterial({color:0xffc26f,transparent:true,opacity:.85,depthTest:true,depthWrite:false})
+);
+scene.add(earlyMarker,lateMarker);
+const aimGuideCache={x:NaN,y:NaN,speed:NaN};
 
 const contactMarker=new THREE.Mesh(
   new THREE.SphereGeometry(.055,16,10),
@@ -567,42 +593,85 @@ function updateBat(now){
   worldBat.visible=true;
   applyBatPose(swingPoseAt(now,S.visualSwing));
 }
-function updateCursorBarrel(){
+function updateAimGuides(){
+  const shown=ui.start.style.display==='none'&&!S.hitView&&!['swinging','posthit'].includes(S.phase);
+  cursorBarrel.visible=shown;
+  cursorCore.visible=shown;
+  const trajectoryOn=shown&&dev.aimMode==='B';
+  swingRibbon.visible=trajectoryOn;
+  swingCenterLine.visible=trajectoryOn;
+  earlyMarker.visible=trajectoryOn;
+  lateMarker.visible=trajectoryOn;
+  cursorBarrel.material.opacity=dev.aimMode==='A'?.25:.09;
+  cursorCore.material.opacity=dev.aimMode==='A'?.70:.43;
+  if(!shown)return;
   const x=S.aimWorld.x,y=S.aimWorld.y;
-  let pos,axis;
-  if(dev.cursorPlane==='STRIKE'){
-    pos=new THREE.Vector3(x,y,PLATE_FRONT-.012);
-    const a=barrelAngle(x,y);
-    axis=new THREE.Vector3(-Math.cos(a),-Math.sin(a),0).normalize();
-  }else{
-    const pose=impactBatPose(x,y);
-    pos=pose.contact;axis=pose.dir;
+  const speed=clamp(Number(dev.swingSpeed)||2,1,4);
+  if(Math.abs(aimGuideCache.x-x)<.0001 &&
+     Math.abs(aimGuideCache.y-y)<.0001 &&
+     aimGuideCache.speed===speed)return;
+  aimGuideCache.x=x;aimGuideCache.y=y;aimGuideCache.speed=speed;
+
+  // Capsule central line == sweetSegment(impactBatPose(x,y)).
+  const pose=impactBatPose(x,y);
+  const center=pose.hand.clone().addScaledVector(pose.dir,(SWEET_START+SWEET_END)/2);
+  cursorBarrel.position.copy(center);
+  cursorBarrel.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),pose.dir);
+  cursorCore.position.copy(center);
+  cursorCore.quaternion.copy(cursorBarrel.quaternion);
+
+  // Pre-release preview follows exact swingPoseAt() motion and speed.
+  // Spatial intersection does not guarantee temporal alignment with the pitch.
+  const toImpact=BASE_TO_CONTACT_MS/speed;
+  const sw={
+    bundle:swingPoseBundle(x,y),
+    motionStart:0,toImpactMs:toImpact,impactAt:toImpact,
+    followMs:BASE_FOLLOW_THROUGH_MS/speed
+  };
+  const t0=toImpact*.15,t1=toImpact+sw.followMs*.42,parts=32;
+  const a=[],b=[],centers=[];
+  for(let k=0;k<=parts;k++){
+    const t=t0+(t1-t0)*k/parts;
+    const seg=sweetSegment(swingPoseAt(t,sw));
+    a.push(seg.a);b.push(seg.b);
+    centers.push(seg.a.clone().lerp(seg.b,.5));
   }
-  cursorBarrel.position.copy(pos);
-  cursorBarrel.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),axis);
-  cursorBarrel.visible=ui.start.style.display==='none'&&!S.hitView&&!['swinging','posthit'].includes(S.phase);
+  const vertices=new Float32Array(parts*18);
+  let offset=0;
+  function push(p){vertices[offset++]=p.x;vertices[offset++]=p.y;vertices[offset++]=p.z;}
+  for(let k=0;k<parts;k++){
+    push(a[k]);push(b[k]);push(a[k+1]);
+    push(b[k]);push(b[k+1]);push(a[k+1]);
+  }
+  const newRibbon=new THREE.BufferGeometry();
+  newRibbon.setAttribute('position',new THREE.BufferAttribute(vertices,3));
+  newRibbon.computeVertexNormals();
+  swingRibbon.geometry.dispose();swingRibbon.geometry=newRibbon;
+  swingCenterLine.geometry.dispose();
+  swingCenterLine.geometry=new THREE.BufferGeometry().setFromPoints(centers);
+  earlyMarker.position.copy(centers[0]);
+  lateMarker.position.copy(centers[parts]);
 }
+
 function screenToAim(clientX,clientY){
   const r=stage.getBoundingClientRect();
   const ndc=new THREE.Vector2(((clientX-r.left)/r.width)*2-1,-(((clientY-r.top)/r.height)*2-1));
   const ray=new THREE.Raycaster();ray.setFromCamera(ndc,camera);
-  let plane;
-  if(dev.cursorPlane==='STRIKE'){
-    plane=new THREE.Plane(new THREE.Vector3(0,0,1),-PLATE_FRONT);
-  }else{
-    const n=new THREE.Vector3(-IMPACT_SLOPE,0,1).normalize();
-    plane=new THREE.Plane(n,-n.z*PLATE_FRONT);
-  }
+  // Both modes map touches onto the actual slanted impact surface.
+  const n=new THREE.Vector3(-IMPACT_SLOPE,0,1).normalize();
+  const plane=new THREE.Plane(n,-n.z*PLATE_FRONT);
   const hit=new THREE.Vector3();
   if(!ray.ray.intersectPlane(plane,hit))return null;
   hit.x=clamp(hit.x,-PLATE_HALF-REACH_X,PLATE_HALF+REACH_X);
   hit.y=clamp(hit.y,ZONE_LOW-REACH_Y,ZONE_HIGH+REACH_Y);
-  hit.z=dev.cursorPlane==='STRIKE'?PLATE_FRONT:idealImpactZ(hit.x);
+  hit.z=idealImpactZ(hit.x);
   return hit;
 }
+
 function showPlateMarker(){
   if(!S.pitch||S.markerShown)return;
-  plateCrossMarker.position.set(S.pitch.target.x,S.pitch.target.y,PLATE_FRONT-.006);
+  const crossing=pitchPointExtended(S.pitch,idealImpactU(S.pitch));
+  plateCrossMarker.position.set(crossing.x,crossing.y,crossing.z-.006);
   plateCrossMarker.visible=true;
   S.markerShown=true;
 }
@@ -791,9 +860,10 @@ function finishSwingMiss(){
   const sw=S.swing;
   const timing=Math.round(sw.closestTiming??(performance.now()-idealImpactTimeMs()));
   const dist=Number.isFinite(sw.closestDist)?Math.round(sw.closestDist*1000):999;
-  ui.result.innerHTML='MISS<small>closest '+dist+'mm · timing Δ '+timing+'ms</small>';
+  const batDelta=Math.round(sw.closestTime-sw.impactAt);
+  ui.result.innerHTML='MISS<small>closest '+dist+'mm · timing Δ '+timing+'ms · bat Δ '+batDelta+'ms</small>';
   ui.result.classList.add('on');setTimeout(()=>ui.result.classList.remove('on'),900);
-  impactStatus.textContent='NO CONTACT · closest '+dist+'mm · timing Δ '+timing+'ms';
+  impactStatus.textContent='NO CONTACT · closest '+dist+'mm · timing Δ '+timing+'ms · bat Δ '+batDelta+'ms';
   S.swing=null;S.phase='missed';S.locked=true;
 }
 function swing(now){
@@ -925,7 +995,7 @@ function animate(now){
   }
 
   updateCameraView(now);
-  updateCursorBarrel();
+  updateAimGuides();
   updateBat(now);
 
   if(S.pitch){
