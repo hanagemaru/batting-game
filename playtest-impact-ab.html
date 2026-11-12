@@ -177,9 +177,11 @@ import {PLATE_HALF,PLATE_FRONT,FLIGHT_MS,pitchPoint} from './pitch-model.js';
 
 
 const INTERVAL_MS=5000; // pitch-start-to-pitch-start interval
+const RESULT_MAX_VISIBLE_MS=3500; // Previous ~4.5s; show about one second less.
+const RESULT_BEFORE_PITCH_MS=1000; // Hide at least 1s before the next scheduled pitch.
 const ZONE_LOW=.52,ZONE_HIGH=1.16;
 const REACH_X=.17,REACH_Y=.18;
-const IMPACT_SLOPE=1.18;
+const IMPACT_SLOPE=0.4633; // Approx. half the previous 49.7 degree X/Y-plane tilt (24.9 degrees).
 const DEFAULT_TIMING_EARLY_MS=150;
 const DEFAULT_TIMING_LATE_MS=150;
 const FAIR_TIMING_RATIO=.68;
@@ -487,6 +489,20 @@ function lookQuaternion(target){
   cameraProbe.lookAt(target);
   return cameraProbe.quaternion.clone();
 }
+let resultShownAt=Infinity;
+function showPitchResult(){
+  resultShownAt=performance.now();
+  ui.result.classList.add('on');
+}
+function updatePitchResultVisibility(now){
+  if(!Number.isFinite(resultShownAt))return;
+  // Automatic mode: hide before the next pitch; manual mode: cap at 3.5s.
+  const timeLimit=Math.min(
+    resultShownAt+RESULT_MAX_VISIBLE_MS,
+    Number.isFinite(S.nextDue)?S.nextDue-RESULT_BEFORE_PITCH_MS:Infinity
+  );
+  if(now>=timeLimit)ui.result.classList.remove('on');
+}
 function armNextPitch(now){
   // Schedule from the start of the previous pitch; preserve a minimum result dwell.
   S.nextDue=dev.auto?Math.max(S.t0+INTERVAL_MS,now+1800):Infinity;
@@ -551,6 +567,7 @@ function nextPitch(now=performance.now()){
   ball.visible=true;battedBall.visible=false;incomingImpactTrail.visible=false;battedTrail.visible=false;plateCrossMarker.visible=false;contactMarker.visible=false;for(const t of trail)t.visible=true;
   ui.pitchNo.textContent=S.n;
   ui.pitchInfo.textContent=S.pitch.type+' · '+S.pitch.course+' · '+FLIGHT_MS[S.pitch.type]+'ms';
+  resultShownAt=Infinity;
   ui.result.classList.remove('on');ui.result.textContent='';
   impactStatus.textContent='CONTACT: —';
 }
@@ -902,7 +919,7 @@ function beginPhysicalBattedBall(ms,ballPos,near,physics){
     ?sideLabel+'得点なし・打球速度 '+exitSpeed.toFixed(1)+'m/秒'
     :'獲得 '+pts+'点・打球速度 '+exitSpeed.toFixed(1)+'m/秒';
   ui.result.innerHTML=resultLabel+'<small>'+detail+'<br>タイミング差 '+Math.round(physics.timingError)+'ms・打球の強さ '+Math.round(physics.power*100)+'%</small>';
-  ui.result.classList.add('on');
+  showPitchResult();
   impactStatus.textContent='CONTACT x '+ballPos.x.toFixed(2)+' / y '+ballPos.y.toFixed(2)+' / z '+ballPos.z.toFixed(2)+' · bat '+batSpeed.toFixed(1)+'m/s · spray '+Math.round(S.batted.sprayDeg)+'° · launch '+Math.round(S.batted.launchDeg)+'°';
 }
 function scanSwingCollision(now){
@@ -939,7 +956,7 @@ function finishSwingMiss(){
   const remaining=Math.max(0,Math.round((sw.closestDist-COLLISION_RADIUS)*1000));
   const reason=remaining>0?'あと約'+remaining+'mmで接触':'衝突できるタイミング・範囲から外れました';
   ui.result.innerHTML='空振り<small>'+reason+'（最短距離 '+dist+'mm）<br>球の到達との差 '+timing+'ms・バットの姿勢との差 '+batDelta+'ms</small>';
-  ui.result.classList.add('on');
+  showPitchResult();
   impactStatus.textContent='NO CONTACT · closest '+dist+'mm · timing Δ '+timing+'ms · bat Δ '+batDelta+'ms';
   S.swing=null;S.phase='missed';S.locked=true;
 }
@@ -1041,7 +1058,7 @@ function animate(now){
 
       if(!hadSwing&&S.phase==='pitching'){
         ui.result.innerHTML='見送り<small>ボールが通過した位置を表示しています</small>';
-        ui.result.classList.add('on');
+        showPitchResult();
       }
       if(S.phase!=='posthit')enterWaiting(now);
     }
@@ -1075,6 +1092,7 @@ function animate(now){
   updateCameraView(now);
   updateAimGuides();
   updateBat(now);
+  updatePitchResultVisibility(now);
 
   if(S.pitch){
     const loc=locationCap(S.pitch.target);
