@@ -25,6 +25,8 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 .aimToggle button{min-height:36px;padding:0 9px;border:1px solid #415364;border-radius:4px;background:#0d1720ef;color:#aabcc8;font:900 10px ui-monospace,monospace;white-space:nowrap}
 .aimToggle button.active{background:#184135;color:#bfffd9;border-color:#8de7b1}
 .aimToggle button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.aimToggle button.surfaceActive{background:#17384c;color:#d2efff;border-color:#81cae7}
+@media(max-width:360px){.aimToggle button{padding:0 6px;font-size:9px}.calBtn{padding:7px 5px}}
 .calBtn{position:absolute;right:8px;top:8px;z-index:5;border:1px solid #415364;background:#0d1720dd;color:#d8e2ea;font:900 8px ui-monospace,monospace;padding:7px 8px}
 .cal{position:absolute;inset:auto 8px 8px 8px;max-height:67%;overflow:auto;background:#081017f2;border:1px solid #425361;padding:10px;z-index:6;display:none;backdrop-filter:blur(8px)}
 .cal.open{display:block}.cal h2{font-size:10px;margin:0 0 8px;letter-spacing:.12em}.cal h2:not(:first-child){margin-top:14px;padding-top:10px;border-top:1px solid #2f3d49}
@@ -68,8 +70,9 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
   <div id="aimToggle" class="aimToggle" role="group" aria-label="カーソル比較モード">
     <button type="button" data-aim-mode="A" aria-pressed="true">A 接触位置</button>
     <button type="button" data-aim-mode="B" aria-pressed="false">B 3D軌道</button>
+    <button type="button" id="impactPlaneBtn" aria-pressed="true">面 ON</button>
   </div>
-  <div id="aimHint" class="hint">A：半透明の緑＝ボール中心の命中範囲。</div>
+  <div id="aimHint" class="hint">指を置いた場所にカーソルは飛ばず、ドラッグの分だけ動きます。</div>
   <button id="calBtn" class="calBtn">CALIBRATE →</button>
   <div id="cursor" class="cursor" style="display:none"></div>
   <div id="result" class="result"></div>
@@ -105,7 +108,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
       </label>
     </div>
     <div class="devGrid" style="margin-top:8px">
-      <div class="devNote">照準の参照面：標準インパクト面（3D固定）<br>A/B共通の物理判定を使用します。</div>
+      <div class="devNote">照準の参照面：標準インパクト面（3D固定）<br>水色の面＝左右に傾斜したコンタクト面。画面左上の「面」で表示を切り替えます。A/B共通の物理判定を使用します。</div>
       <label class="devField">Swing delay
         <div class="ctrl" style="grid-template-columns:1fr 48px">
           <input id="swingDelay" type="range" min="0" max="180" step="10" value="0"><output>0ms</output>
@@ -150,7 +153,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
     <div class="card">
       <div class="eyebrow">IMPACT MODEL PLAYTEST</div>
       <h1>接触位置か、<br>3Dスイング軌道か。</h1>
-      <p>A「接触位置」とB「3D軌道」を画面左上で切り替えて比較します。どちらも同じ3Dバット軌道・衝突判定です。指で狙いを動かし、指を離すとスイング。投球前に離した場合はスイングしません。</p>
+      <p>A「接触位置」とB「3D軌道」を切り替えて比較できます。水色の斜めの面がカーソルの移動範囲で、内角ほど投手寄りです。「面 ON/OFF」で切替できます。画面のどこに指を置いてもカーソルは飛ばず、ドラッグした分だけ動きます。離すとスイングします。</p>
       <button id="startBtn">START</button>
     </div>
   </div>
@@ -279,6 +282,59 @@ handA.position.y=.030;handB.position.y=.090;
 worldBat.add(handA,handB);
 scene.add(worldBat);
 
+// Cursor mobility is the fixed "standard impact surface":
+// z = PLATE_FRONT + IMPACT_SLOPE * x.
+// Generate the geometry from those same limits, including the reachable ball margin.
+const impactSurfacePoint=(x,y)=>new THREE.Vector3(x,y,idealImpactZ(x));
+const surfaceL=-PLATE_HALF-REACH_X,surfaceR=PLATE_HALF+REACH_X;
+const surfaceB=ZONE_LOW-REACH_Y,surfaceT=ZONE_HIGH+REACH_Y;
+const surfaceCorners=[
+  impactSurfacePoint(surfaceL,surfaceB),
+  impactSurfacePoint(surfaceR,surfaceB),
+  impactSurfacePoint(surfaceR,surfaceT),
+  impactSurfacePoint(surfaceL,surfaceT)
+];
+const surfaceTriangles=[];
+for(const idx of [0,1,2,0,2,3]){
+  const p=surfaceCorners[idx];
+  surfaceTriangles.push(p.x,p.y,p.z);
+}
+const surfaceGeometry=new THREE.BufferGeometry();
+surfaceGeometry.setAttribute('position',new THREE.Float32BufferAttribute(surfaceTriangles,3));
+surfaceGeometry.computeVertexNormals();
+const contactSurfaceFace=new THREE.Mesh(
+  surfaceGeometry,
+  new THREE.MeshBasicMaterial({
+    color:0x79c6e4,transparent:true,opacity:.10,
+    side:THREE.DoubleSide,depthTest:true,depthWrite:false
+  })
+);
+contactSurfaceFace.renderOrder=0;
+scene.add(contactSurfaceFace);
+const contactSurfaceEdge=new THREE.LineLoop(
+  new THREE.BufferGeometry().setFromPoints(surfaceCorners),
+  new THREE.LineBasicMaterial({
+    color:0xa4e2f5,transparent:true,opacity:.60,depthTest:true,depthWrite:false
+  })
+);
+contactSurfaceEdge.renderOrder=1;
+scene.add(contactSurfaceEdge);
+const gridPts=[];
+for(const x of [-PLATE_HALF,0,PLATE_HALF]){
+  gridPts.push(impactSurfacePoint(x,surfaceB),impactSurfacePoint(x,surfaceT));
+}
+for(const y of [ZONE_LOW,ZONE_HIGH]){
+  gridPts.push(impactSurfacePoint(surfaceL,y),impactSurfacePoint(surfaceR,y));
+}
+const contactSurfaceGrid=new THREE.LineSegments(
+  new THREE.BufferGeometry().setFromPoints(gridPts),
+  new THREE.LineBasicMaterial({
+    color:0x9dd6ed,transparent:true,opacity:.28,depthTest:true,depthWrite:false
+  })
+);
+contactSurfaceGrid.renderOrder=1;
+scene.add(contactSurfaceGrid);
+
 // A/B aiming preview uses the SAME sweet-spot segment as the collision scanner.
 // The green envelope is the allowed distance from BALL CENTER to the segment.
 const cursorBarrel=new THREE.Mesh(
@@ -347,8 +403,9 @@ try{Object.assign(cfg,JSON.parse(localStorage.getItem(STORAGE)||'{}'))}catch(e){
 for(const id of controlsIds){ctl[id].value=cfg[id]}
 
 const DEV_STORAGE='batting-impact-dev-v2';
-const dev={pitchMode:'RANDOM',courseMode:'RANDOM',aimMode:'A',swingDelay:0,swingSpeed:2,timingEarly:DEFAULT_TIMING_EARLY_MS,timingLate:DEFAULT_TIMING_LATE_MS,auto:true};
+const dev={pitchMode:'RANDOM',courseMode:'RANDOM',aimMode:'A',showImpactPlane:true,swingDelay:0,swingSpeed:2,timingEarly:DEFAULT_TIMING_EARLY_MS,timingLate:DEFAULT_TIMING_LATE_MS,auto:true};
 try{Object.assign(dev,JSON.parse(localStorage.getItem(DEV_STORAGE)||'{}'))}catch(e){}
+if(typeof dev.showImpactPlane!=='boolean')dev.showImpactPlane=true;
 const pitchMode=document.getElementById('pitchMode'),courseMode=document.getElementById('courseMode'),swingDelay=document.getElementById('swingDelay'),swingSpeed=document.getElementById('swingSpeed'),timingEarly=document.getElementById('timingEarly'),timingLate=document.getElementById('timingLate'),autoBtn=document.getElementById('autoBtn'),devStatus=document.getElementById('devStatus'),impactStatus=document.getElementById('impactStatus');
 function saveDev(){try{localStorage.setItem(DEV_STORAGE,JSON.stringify(dev))}catch(e){}}
 function syncDevUI(){
@@ -369,14 +426,25 @@ function syncAimUI(){
     button.setAttribute('aria-pressed',String(active));
   });
   document.getElementById('aimHint').textContent=dev.aimMode==='A'
-    ?'A：半透明の緑＝ボール中心の命中範囲。ドラッグで狙い、離してスイング。'
-    :'B：緑の帯＝実際の3Dスイング軌道。青→黄の順に振る。離してスイング。';
+    ?'A：緑＝ボールの当たる範囲。指をどこに置いても相対ドラッグで移動。'
+    :'B：緑＝3Dスイング軌道。指をどこに置いても相対ドラッグで移動。';
 }
 aimButtons.forEach(button=>button.addEventListener('click',()=>{
   dev.aimMode=button.dataset.aimMode;
   saveDev();syncAimUI();
 }));
 syncAimUI();
+const impactPlaneBtn=document.getElementById('impactPlaneBtn');
+function syncImpactPlaneUI(){
+  impactPlaneBtn.textContent=dev.showImpactPlane?'面 ON':'面 OFF';
+  impactPlaneBtn.classList.toggle('surfaceActive',dev.showImpactPlane);
+  impactPlaneBtn.setAttribute('aria-pressed',String(dev.showImpactPlane));
+}
+impactPlaneBtn.addEventListener('click',()=>{
+  dev.showImpactPlane=!dev.showImpactPlane;
+  saveDev();syncImpactPlaneUI();
+});
+syncImpactPlaneUI();
 
 function applyCamera(){
   for(const id of controlsIds){
@@ -588,6 +656,9 @@ function updateBat(now){
 }
 function updateAimGuides(){
   const shown=ui.start.style.display==='none'&&!S.hitView&&!['swinging','posthit'].includes(S.phase);
+  contactSurfaceFace.visible=shown&&dev.showImpactPlane;
+  contactSurfaceEdge.visible=shown&&dev.showImpactPlane;
+  contactSurfaceGrid.visible=shown&&dev.showImpactPlane;
   cursorBarrel.visible=shown;
   cursorCore.visible=shown;
   const trajectoryOn=shown&&dev.aimMode==='B';
@@ -646,19 +717,27 @@ function updateAimGuides(){
   lateMarker.position.copy(centers[parts]);
 }
 
-function screenToAim(clientX,clientY){
+// Relative drag: the initial touch never changes the cursor position.
+// Convert finger delta from screen pixels to a new screen projection of the
+// *current cursor*, then intersect with the exact slanted impact plane.
+// This makes movement insensitive to where on the canvas the finger began.
+const aimRaycaster=new THREE.Raycaster();
+const aimPlaneNormal=new THREE.Vector3(-IMPACT_SLOPE,0,1).normalize();
+const aimPlane=new THREE.Plane(aimPlaneNormal,-aimPlaneNormal.z*PLATE_FRONT);
+function moveAimByScreenDelta(dx,dy){
+  if(dx===0&&dy===0)return;
   const r=stage.getBoundingClientRect();
-  const ndc=new THREE.Vector2(((clientX-r.left)/r.width)*2-1,-(((clientY-r.top)/r.height)*2-1));
-  const ray=new THREE.Raycaster();ray.setFromCamera(ndc,camera);
-  // Both modes map touches onto the actual slanted impact surface.
-  const n=new THREE.Vector3(-IMPACT_SLOPE,0,1).normalize();
-  const plane=new THREE.Plane(n,-n.z*PLATE_FRONT);
+  if(r.width<=0||r.height<=0)return;
+  camera.updateMatrixWorld();
+  const p=S.aimWorld.clone().project(camera);
+  if(!Number.isFinite(p.x)||!Number.isFinite(p.y))return;
+  const ndc=new THREE.Vector2(p.x+2*dx/r.width,p.y-2*dy/r.height);
+  aimRaycaster.setFromCamera(ndc,camera);
   const hit=new THREE.Vector3();
-  if(!ray.ray.intersectPlane(plane,hit))return null;
-  hit.x=clamp(hit.x,-PLATE_HALF-REACH_X,PLATE_HALF+REACH_X);
-  hit.y=clamp(hit.y,ZONE_LOW-REACH_Y,ZONE_HIGH+REACH_Y);
-  hit.z=idealImpactZ(hit.x);
-  return hit;
+  if(!aimRaycaster.ray.intersectPlane(aimPlane,hit))return;
+  const x=clamp(hit.x,-PLATE_HALF-REACH_X,PLATE_HALF+REACH_X);
+  const y=clamp(hit.y,ZONE_LOW-REACH_Y,ZONE_HIGH+REACH_Y);
+  S.aimWorld.set(x,y,idealImpactZ(x));
 }
 
 function showPlateMarker(){
@@ -887,15 +966,16 @@ canvas.addEventListener('pointerdown',e=>{
   if(e.pointerType==='mouse'&&e.button!==0)return;
   if(ui.start.style.display!=='none'||S.input||overlayCalOpen||S.phase==='posthit'||S.phase==='swinging'||S.phase==='missed')return;
   e.preventDefault();
-  const hit=screenToAim(e.clientX,e.clientY);if(hit)S.aimWorld.copy(hit);
-  S.input={id:e.pointerId,down:performance.now()};
-  canvas.setPointerCapture?.(e.pointerId)
+  // No absolute aim placement on touch-down; any canvas point starts a drag.
+  S.input={id:e.pointerId,lastX:e.clientX,lastY:e.clientY,down:performance.now()};
+  canvas.setPointerCapture?.(e.pointerId);
 },{passive:false});
 canvas.addEventListener('pointermove',e=>{
-  const hit=screenToAim(e.clientX,e.clientY);
-  if(!hit)return;
-  if(S.input&&e.pointerId===S.input.id){e.preventDefault();S.aimWorld.copy(hit);return}
-  if(e.pointerType==='mouse'&&ui.start.style.display==='none'&&!['posthit','swinging','missed'].includes(S.phase))S.aimWorld.copy(hit);
+  if(!S.input||e.pointerId!==S.input.id)return;
+  e.preventDefault();
+  const dx=e.clientX-S.input.lastX,dy=e.clientY-S.input.lastY;
+  S.input.lastX=e.clientX;S.input.lastY=e.clientY;
+  moveAimByScreenDelta(dx,dy);
 },{passive:false});
 canvas.addEventListener('pointerup',e=>{
   if(!S.input||e.pointerId!==S.input.id)return;
@@ -905,6 +985,7 @@ canvas.addEventListener('pointerup',e=>{
   S.input=null
 },{passive:false});
 canvas.addEventListener('pointercancel',e=>{if(!S.input||e.pointerId!==S.input.id)return;S.input=null},{passive:false});
+canvas.addEventListener('lostpointercapture',e=>{if(S.input&&e.pointerId===S.input.id)S.input=null});
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
 
 document.getElementById('calBtn').onclick=()=>ui.cal.classList.toggle('open');
