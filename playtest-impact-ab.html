@@ -174,6 +174,10 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 <script type="module">
 import * as THREE from 'three';
 import {PLATE_HALF,PLATE_FRONT,FLIGHT_MS,pitchPoint} from './pitch-model.js';
+import {IMPACT_SLOPE,BAT_LENGTH,GRIP_TO_CONTACT,SWEET_START,SWEET_END,
+  BASE_TO_CONTACT_MS,BASE_FOLLOW_THROUGH_MS,idealImpactZ,barrelAngle,
+  impactBatPose,swingPoseBundle,swingPoseAt,sweetSegment,pointOnSweet}
+  from './swing-kinematics.js';
 
 
 const INTERVAL_MS=5000; // pitch-start-to-pitch-start interval
@@ -181,23 +185,16 @@ const RESULT_MAX_VISIBLE_MS=3500; // Previous ~4.5s; show about one second less.
 const RESULT_BEFORE_PITCH_MS=1000; // Hide at least 1s before the next scheduled pitch.
 const ZONE_LOW=.52,ZONE_HIGH=1.16;
 const REACH_X=.17,REACH_Y=.18;
-const IMPACT_SLOPE=0.4633; // Approx. half the previous 49.7 degree X/Y-plane tilt (24.9 degrees).
 const DEFAULT_TIMING_EARLY_MS=150;
 const DEFAULT_TIMING_LATE_MS=150;
 const FAIR_TIMING_RATIO=.68;
 const FOUL_LINE_DEG=45;
 const FOUL_MAX_DEG=68;
-const BAT_LENGTH=.864; // 34 in adult bat
 const BAT_BARREL_RADIUS=.033; // ~2.6 in max diameter
 const BAT_HANDLE_RADIUS=.014;
-const GRIP_TO_CONTACT=.72;
-const SWEET_START=.56;
-const SWEET_END=.82;
 const BAT_RADIUS=.033;
 const BALL_RADIUS=.0365;
 const COLLISION_RADIUS=BAT_RADIUS+BALL_RADIUS+.009;
-const BASE_TO_CONTACT_MS=100;
-const BASE_FOLLOW_THROUGH_MS=220;
 const HIT_VIEW_HOLD_MS=500;
 const HIT_VIEW_RETURN_MS=150;
 const stage=document.querySelector('#stage'),canvas=document.querySelector('#three');
@@ -589,38 +586,14 @@ function pitchPointExtended(pitch,u){
     z:b.z+(b.z-a.z)*k
   }
 }
-function idealImpactZ(x){
-  return PLATE_FRONT+IMPACT_SLOPE*x;
-}
-function idealImpactU(pitch){
-  const z=idealImpactZ(pitch.target.x);
-  return (pitch.release.z-z)/(pitch.release.z-pitch.target.z);
-}
+
 function locationCap(target){
   const ox=Math.max(0,Math.abs(target.x)-PLATE_HALF)/REACH_X;
   const oy=Math.max(0,target.y-ZONE_HIGH,ZONE_LOW-target.y)/REACH_Y;
   const outside=Math.max(ox,oy);
   return{reachable:outside<=1,cap:clamp(1-.30*outside,.70,1),outside};
 }
-function barrelAngle(x,y){
-  const inside=clamp((x+PLATE_HALF)/(2*PLATE_HALF),0,1);
-  const high=clamp((y-ZONE_LOW)/(ZONE_HIGH-ZONE_LOW),0,1);
-  return THREE.MathUtils.degToRad(5+20*inside+20*(1-high));
-}
-function rotateY(v,a){
-  const c=Math.cos(a),sn=Math.sin(a);
-  return new THREE.Vector3(v.x*c+v.z*sn,v.y,-v.x*sn+v.z*c);
-}
-function impactBatPose(x,y){
-  const inside=clamp((x+PLATE_HALF)/(2*PLATE_HALF),0,1);
-  const tilt=barrelAngle(x,y);
-  const forward=THREE.MathUtils.degToRad(10+25*inside);
-  const h=Math.cos(tilt);
-  const dir=new THREE.Vector3(-h*Math.cos(forward),-Math.sin(tilt),h*Math.sin(forward)).normalize();
-  const contact=new THREE.Vector3(x,y,idealImpactZ(x));
-  const hand=contact.clone().addScaledVector(dir,-GRIP_TO_CONTACT);
-  return{hand,dir,contact};
-}
+
 function battingViewBasis(){
   const eye=new THREE.Vector3(cfg.eyeX,cfg.eyeY,cfg.eyeZ);
   const look=new THREE.Vector3(cfg.lookX,cfg.lookY,cfg.lookZ);
@@ -642,22 +615,7 @@ function stanceStartPose(){
 }
 // A continuous circular arc drives both rendered and collision-tested sweet spots.
 // A single angular parameter removes the previous kink at the impact keyframe.
-function swingPoseBundle(x,y){
-  return{impact:impactBatPose(x,y)};
-}
-function swingPoseAt(ms,sw){
-  const t=clamp(ms,sw.motionStart,sw.impactAt+sw.followMs);
-  const relative=(t-sw.impactAt)/Math.max(1,sw.toImpactMs);
-  const angle=THREE.MathUtils.degToRad(56*relative);
-  const impact=sw.bundle.impact;
-  const dir=rotateY(impact.dir,angle);
-  dir.y+=.035*Math.sin(angle);
-  dir.normalize();
-  const hand=impact.hand.clone().add(new THREE.Vector3(
-    -.085*Math.sin(angle),.030*(1-Math.cos(angle)),.055*Math.sin(angle)
-  ));
-  return{hand,dir};
-}
+
 function applyBatPose(pose){
   worldBat.position.copy(pose.hand);
   worldBat.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),pose.dir.clone().normalize());
@@ -788,16 +746,7 @@ function closestOnSegment(p,a,b){
   const q=a.clone().addScaledVector(ab,t);
   return{point:q,t,distance:q.distanceTo(p)};
 }
-function sweetSegment(pose){
-  return{
-    a:pose.hand.clone().addScaledVector(pose.dir,SWEET_START),
-    b:pose.hand.clone().addScaledVector(pose.dir,SWEET_END)
-  };
-}
-function pointOnSweet(pose,t){
-  const seg=sweetSegment(pose);
-  return seg.a.clone().lerp(seg.b,t);
-}
+
 function ballAtMs(ms){
   return pitchPosition((ms-S.t0)/FLIGHT_MS[S.pitch.type]);
 }
