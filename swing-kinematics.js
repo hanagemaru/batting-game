@@ -59,7 +59,18 @@ export function swingPoseBundle(x,y){
 }
 export function swingPoseAt(ms,sw){
   const t=clamp(ms,sw.motionStart,sw.impactAt+sw.followMs);
-  const u=(t-sw.impactAt)/Math.max(1,sw.toImpactMs);
+  const raw=(t-sw.impactAt)/Math.max(1,sw.toImpactMs);
+  const followRatio=Math.max(.001,sw.followMs/Math.max(1,sw.toImpactMs));
+  // Ease angular motion in/out without changing the contact pose or velocity.
+  // f'(motion start)=0, f'(impact)=1, f'(follow finish)=0.
+  let u;
+  if(raw<0){
+    const q=clamp(raw+1,0,1);
+    u=-1+2*q*q-q*q*q;
+  }else{
+    const q=clamp(raw,0,followRatio);
+    u=q+q*q/followRatio-q*q*q/(followRatio*followRatio);
+  }
   // Torso/hand rotation starts sooner; rapid bat release follows. Both
   // curves are continuous in angle AND angular velocity through contact.
   // The offsets pin both curves to zero at the intended contact time.
