@@ -103,7 +103,7 @@ const plate=new THREE.Mesh(
  new THREE.MeshBasicMaterial({color:0xd7e3eb,side:THREE.DoubleSide,transparent:true,opacity:.7})
 );
 // ShapeGeometry local XY to world XZ, positive Z = pitcher.
-plate.rotation.x=-Math.PI/2;plate.position.y=.005;scene.add(plate);
+plate.rotation.x=Math.PI/2;plate.position.y=.005;scene.add(plate);
 const axisX=new THREE.ArrowHelper(new THREE.Vector3(1,0,0),new THREE.Vector3(0,.02,-.6),.75,0x6d9fc7,.10,.045);
 const axisZ=new THREE.ArrowHelper(new THREE.Vector3(0,0,1),new THREE.Vector3(0,.02,-.6),.75,0xe0b879,.10,.045);
 scene.add(axisX,axisZ);
@@ -241,10 +241,10 @@ function updateCamera(){
    orthographic.position.set(.32,6,.25);
    orthographic.lookAt(.32,.85,.25);
  }else{
-   batterCamera.aspect=aspect;batterCamera.fov=80;batterCamera.updateProjectionMatrix();
-   // Same initial default POV; do not overwrite per-user saved camera in game.
-   let c={eyeX:.69,eyeY:1.45,eyeZ:0,lookX:.43,lookY:1.24,lookZ:.43};
+   // Respect manual game camera calibration (including FOV); never write it.
+   let c={eyeX:.69,eyeY:1.45,eyeZ:0,lookX:.43,lookY:1.24,lookZ:.43,fov:80};
    try{const saved=JSON.parse(localStorage.getItem('batting-camera-v1')||'{}');c={...c,...saved}}catch(e){}
+   batterCamera.aspect=aspect;batterCamera.fov=c.fov;batterCamera.updateProjectionMatrix();
    batterCamera.position.set(c.eyeX,c.eyeY,c.eyeZ);
    batterCamera.lookAt(c.lookX,c.lookY,c.lookZ);
  }
