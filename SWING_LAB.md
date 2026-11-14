@@ -1,5 +1,68 @@
 # Swing motion study lab — 2026-11-13
 
+## Current corrected model (2026-11-14)
+
+**This section supersedes earlier experimental sections describing the
+direct sweet-spot Bezier model and the 40ms complete swing.**
+Their numerical benchmarks are obsolete.
+
+### Confirmed fault
+- Former independent sweet-spot trajectory solved grip backwards from
+  barrel direction, moving the grip X coordinate from approximately +0.60m
+  at impact to -1.50m at +110ms: over 2m of lateral displacement.
+- The sweet spot lifted by 0.55m at +80ms; this was forced by a hand-
+  unconstrained Bezier path.
+- Previous geometric checks verified continuity but overlooked the hand
+  excursion; this was not a rendering issue.
+
+### Corrected kinematics
+- Grip-first: hands follow a short curved path anchored at the exact
+  impactBatPose grip location. The motion is constrained near the hitter.
+- Bat orientation changes independently in yaw and elevation as the bat
+  transitions from upright, loads into the swing plane, then releases.
+  The sweet spot is derived from the grip and a rigid bat direction.
+- Physical-looking full motion has 110ms loading, 40ms final acceleration,
+  110ms follow-through (at the default 2x speed).
+- The gameplay input-to-contact latency stays at 40ms. The preparation is
+  considered preloaded before the finger release; the game currently renders
+  only the last 40ms of acceleration, while the three-camera lab shows all
+  150ms from the upright stance through impact.
+- Speed adjustments remain developer settings; their extreme values are not
+  claimed to be physically representative of real athletes.
+
+### Quantitative validation
+Tested center, high-inside, low-outside, at 1x, 2x, and 4x:
+- Contact grip and orientation match impactBatPose within floating error.
+- Maximum grip distance from impact position: 0.264m (previous: >2m).
+- First derivatives are continuous at loading/launch and impact joins.
+- At default 2x: bat tip 30.5–31.5m/s and grip about 3.2m/s at contact.
+- Over the last 10ms, sweet-spot arc/chord ratio is about 1.01, while the
+  complete head path remains curved (no forcibly linear entire swing).
+- Sweet-spot height after contact rises about 0.17m at +40ms.
+- Both rear (XY) and overhead (XZ) numerical projections were plotted and
+  visually compared to research swing diagrams.
+- The existing collision and batted-ball physics function bodies stay intact.
+  Module syntax and imported/exported symbol references were checked.
+
+### Primary evidence checked
+- King et al. (2012), A new technology for resolving the dynamics of a
+  swinging bat, DOI 10.1007/s12283-012-0084-9. Measured example:
+  approximately 165ms set-to-impact downswing, sweet-spot speed 31.6m/s.
+  Figures 7–8 show overhead hand spirals and the inclined swing plane.
+  https://baseball.physics.illinois.edu/SwingSensorTechnology.pdf
+- Morishita, Hirano, Yanai (2013): segment contributions from torso and
+  upper extremities measured at 500Hz.
+  https://doi.org/10.32226/jjbse.2013_003
+- Milanovich and Nesbit (2014): variable-radius 3D hand and barrel motion
+  challenge fixed-pivot and hand-unconstrained representations.
+  https://www.jssm.org/hf.php?id=jssm-13-180.xml
+
+The corrected model is a research-informed procedural approximation, NOT
+a real player's measured swing. iPhone Safari runtime and subjective visual
+accuracy have not yet been validated on-device.
+
+---
+
 This is a **research-informed, procedural approximation**, not motion capture,
 inverse dynamics, a biomechanically validated player model, or a full skeletal simulator.
 
