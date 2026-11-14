@@ -192,7 +192,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 import * as THREE from 'three';
 import {PLATE_HALF,PLATE_FRONT,FLIGHT_MS,pitchPoint} from './pitch-model.js';
 import {IMPACT_SLOPE,BAT_LENGTH,GRIP_TO_CONTACT,SWEET_START,SWEET_END,
-  BASE_TO_CONTACT_MS,BASE_FOLLOW_THROUGH_MS,idealImpactZ,barrelAngle,
+  BASE_TO_CONTACT_MS,BASE_PREP_MS,BASE_FOLLOW_THROUGH_MS,idealImpactZ,barrelAngle,
   impactBatPose,swingPoseBundle,swingPoseAt,sweetSegment,pointOnSweet}
   from './swing-kinematics.js';
 
@@ -725,13 +725,18 @@ function updateAimGuides(){
 
   // Pre-release preview follows exact swingPoseAt() motion and speed.
   // Spatial intersection does not guarantee temporal alignment with the pitch.
+  const prepMs=BASE_PREP_MS/speed;
   const toImpact=BASE_TO_CONTACT_MS/speed;
   const sw={
     bundle:swingPoseBundle(x,y),
-    motionStart:0,toImpactMs:toImpact,impactAt:toImpact,
-    followMs:BASE_FOLLOW_THROUGH_MS/speed
+    motionStart:0,prepMs,launchStart:prepMs,
+    toImpactMs:toImpact,impactAt:prepMs+toImpact,
+    followMs:BASE_FOLLOW_THROUGH_MS/speed,
+    finishAt:prepMs+toImpact+BASE_FOLLOW_THROUGH_MS/speed
   };
-  const t0=toImpact*.25,t1=toImpact+sw.followMs*.40,parts=48;
+  // Show the hittable late-phase arc, not the much earlier upright load.
+  const t0=sw.launchStart+toImpact*.08,
+        t1=sw.impactAt+sw.followMs*.40,parts=48;
   const a=[],b=[],centers=[];
   for(let k=0;k<=parts;k++){
     const t=t0+(t1-t0)*k/parts;
@@ -978,14 +983,19 @@ function swing(now){
   const bundle=swingPoseBundle(S.aimWorld.x,S.aimWorld.y);
   const speed=clamp(Number(dev.swingSpeed)||2,1,4);
   const delay=Math.max(0,Number(dev.swingDelay)||0);
-  const motionStart=now+delay;
+  // Game input starts at the preloaded bat's launch phase (last 40ms at 2x).
+  // The complete upright->slot phase appears in the diagnostic timeline.
+  const launchStart=now+delay;
+  const prepMs=BASE_PREP_MS/speed;
+  const motionStart=launchStart-prepMs;
   const toImpactMs=BASE_TO_CONTACT_MS/speed;
-  const impactAt=motionStart+toImpactMs;
+  const impactAt=launchStart+toImpactMs;
   const followMs=BASE_FOLLOW_THROUGH_MS/speed;
   const finishAt=impactAt+followMs;
   const sw={
-    start:now,delay,speed,motionStart,toImpactMs,impactAt,followMs,finishAt,
-    bundle,lastCheck:motionStart,closestDist:Infinity,closestTime:now,closestTiming:0
+    start:now,delay,speed,motionStart,launchStart,prepMs,toImpactMs,
+    impactAt,followMs,finishAt,bundle,lastCheck:launchStart,
+    closestDist:Infinity,closestTime:now,closestTiming:0
   };
   S.swing=sw;S.visualSwing={...sw};
   S.phase='swinging';S.locked=true;
