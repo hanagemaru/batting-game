@@ -80,7 +80,7 @@ select{min-height:33px;background:#122632;border:1px solid #43616c;border-radius
 </div>
 <label class="options"><input type="checkbox" id="showPitchPath" checked> ボールの参考軌道を表示</label>
 <label class="options"><input type="checkbox" id="oldTrace"> 旧モデルのヘッド軌道も比較表示</label>
-<div class="note">緑の線はバットの芯。コンタクトまでほぼ直線、その後は上向きに抜ける新軌道です。空色の線は球種別の参考投球軌道（タイミングは同期していません）。旧ヘッド軌道は参考比較用です。</div>
+<div class="note">実測研究を参考に、構え→バットを寝かせる準備動作→最終40msの加速→フォロースルーを表示。青＝グリップ、黄＝ヘッド、緑＝芯。手元は体の近くで回転します。旧ヘッド軌道と参考投球軌道は比較用です。</div>
 </section>
 </main>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
@@ -238,7 +238,8 @@ function updatePose(){
  const v2=tipSpeedB.hand.clone().addScaledVector(tipSpeedB.dir,BAT_LENGTH);
  const v=v1.distanceTo(v2)*1000/Math.max(1,Math.min(t+1,sw.finishAt)-Math.max(t-1,sw.motionStart));
  const core=p.hand.clone().addScaledVector(p.dir,(SWEET_START+SWEET_END)/2);
- const origin=sw.bundle.core;
+ const impact=sw.bundle.impact;
+ const origin=impact.hand.clone().addScaledVector(impact.dir,(SWEET_START+SWEET_END)/2);
  const rise=core.y-origin.y;
  el('hud').innerHTML='<strong>'+when+'</strong><div>ヘッド速度 '+v.toFixed(1)+' m/s</div><div>芯の高さ：コンタクト比 '+(rise>=0?'+':'')+Math.round(rise*100)+'cm</div><div>球種 '+pitchNames[el('pitchType').value]+' · 構え '+el('stanceAngle').value+'°</div><div>横 '+Number(el('course').value).toFixed(2)+'m・高さ '+Number(el('height').value).toFixed(2)+'m</div>';
  timeline.value=String(Math.round(progress*1000));
