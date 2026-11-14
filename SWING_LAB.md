@@ -358,3 +358,31 @@ Numerical regression:
   physical collision scanner, saved camera, pitch cadence or bat/ball
   collision response functions.
 - Live Safari runtime still needs validation on a device.
+
+
+## 2026-11-14: square bat at contact; maintain incoming swing plane after contact
+
+- At the selected standard contact point (inside pitches still farther toward
+  pitcher), the **bat is parallel to the X axis when seen from overhead**:
+  its 3D direction is `(-cos(barrelTilt), -sin(barrelTilt), 0)`.
+  Its vertical tilt is retained. Previous overhead yaw was 10–35 degrees.
+- Before contact, the approach control is now a milder direction
+  (yaw -65° relative to contact, elevation +3° versus impact).
+- After contact, remove independently specified follow-through direction
+  controls. Instead extend the SAME great-circle plane defined by the
+  incoming pre-contact control and the impact direction; keep the
+  initial angular tangent matched across contact.
+- Reduce final angular extent to ~66.4–66.9° after contact (previous ~99°);
+  at default speed, sweet-spot Y rise after +40ms is ~0.186m rather than
+  ~0.399m. Full follow-through Y rise ~0.333m.
+- 27 numerical test cases (3 courses × 3 initial elevations × 3 speeds):
+  overhead contact angle exactly 0°, contact position/direction unchanged
+  relative to the newly defined target, post-contact plane deviation
+  within floating-point precision, compact hand motion (≤0.264m),
+  nominal tip speed ~27.9m/s and 40ms response retained.
+- The three-view lab HUD displays current overhead bat angle and
+  post-contact swing-plane deviation; ideal values are 0° at contact and
+  approximately 0° plane deviation after contact.
+- The original physical collision and hit calculations, saved camera,
+  pitch cadence, Japanese ball-type text and existing touch input are
+  unchanged. iPhone Safari visual test is still required.
