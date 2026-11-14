@@ -18,7 +18,7 @@ export const BAT_LENGTH=.864;
 export const GRIP_TO_CONTACT=.72;
 export const SWEET_START=.56;
 export const SWEET_END=.82;
-export const BASE_TO_CONTACT_MS=220; // 110 ms to contact at default 2x; includes barrel drop from launch posture.
+export const BASE_TO_CONTACT_MS=80; // 40 ms to impact at the default 2x game speed.
 export const DEFAULT_STANCE_ELEVATION_DEG=70; // Adjustable; no universal batting stance exists.
 export const BASE_FOLLOW_THROUGH_MS=220;
 
@@ -50,51 +50,78 @@ export function impactBatPose(x,y){
   const hand=contact.clone().addScaledVector(dir,-GRIP_TO_CONTACT);
   return{hand,dir,contact};
 }
+const SWEET_MID=(SWEET_START+SWEET_END)/2;
+
+// Smooth cubic path for the sweet spot. Its control points preserve both a
+// nearly straight approach into contact and an ascending finish after contact.
+function cubic(p0,p1,p2,p3,t){
+  const u=1-t;
+  return p0.clone().multiplyScalar(u*u*u)
+    .addScaledVector(p1,3*u*u*t)
+    .addScaledVector(p2,3*u*t*t)
+    .addScaledVector(p3,t*t*t);
+}
+function smoothstep(t){return t*t*(3-2*t);}
 export function swingPoseBundle(x,y,stanceElevationDeg=DEFAULT_STANCE_ELEVATION_DEG){
   const impact=impactBatPose(x,y);
-  // Shoulder/torso surrogate is offset from impact grip; motion of the grip
-  // traces a short curved arc around it instead of translating linearly.
-  const pivot=impact.hand.clone().add(new V3(.28,-.035,-.05));
-  const radius=impact.hand.clone().sub(pivot);
-  return{impact,pivot,radius,stanceElevationDeg:clamp(Number(stanceElevationDeg)||DEFAULT_STANCE_ELEVATION_DEG,45,85)};
+  const core=impact.hand.clone().addScaledVector(impact.dir,SWEET_MID);
+  // Right-handed player: launch from the hands/inside and slightly behind,
+  // then approach across the plate. +Z is toward the pitcher.
+  const approachStart=core.clone().add(new V3(.78,.43,-.34));
+  const approachC1=approachStart.clone(); // starts from rest
+  // Nearly tangent to the intended swing plane as the core reaches the ball:
+  // lateral travel toward the far side plus a small upward component.
+  const approachC2=core.clone().add(new V3(.31,-.055,-.105));
+  const finish=core.clone().add(new V3(-1.06,.64,.49));
+  return{
+    impact,core,approachStart,approachC1,approachC2,finish,
+    stanceElevationDeg:clamp(Number(stanceElevationDeg)||DEFAULT_STANCE_ELEVATION_DEG,45,85)
+  };
 }
 export function swingPoseAt(ms,sw){
   const t=clamp(ms,sw.motionStart,sw.impactAt+sw.followMs);
-  const raw=(t-sw.impactAt)/Math.max(1,sw.toImpactMs);
-  const followRatio=Math.max(.001,sw.followMs/Math.max(1,sw.toImpactMs));
-  // Ease angular motion in/out without changing the contact pose or velocity.
-  // f'(motion start)=0, f'(impact)=1, f'(follow finish)=0.
-  let u;
-  if(raw<0){
-    const q=clamp(raw+1,0,1);
-    u=-1+2*q*q-q*q*q;
+  const pre=t<=sw.impactAt;
+  const durationIn=Math.max(1,sw.toImpactMs),durationOut=Math.max(1,sw.followMs);
+  const q=pre?clamp((t-sw.motionStart)/durationIn,0,1):
+    clamp((t-sw.impactAt)/durationOut,0,1);
+  const b=sw.bundle;
+
+  let core,yawDeg,elevation;
+  const impactElevation=Math.asin(clamp(b.impact.dir.y,-1,1));
+  if(pre){
+    // Cubic controls make approach near-linear in XZ and smoothly turn upward
+    // near the actual impact, rather than traversing a symmetric disc arc.
+    core=cubic(b.approachStart,b.approachC1,b.approachC2,b.core,q);
+    // Hermite yaw from -60deg to 0deg: zero start velocity, positive contact
+    // velocity. Contact yaw velocity will match the follow-through branch.
+    const h00=2*q*q*q-3*q*q+1,h11=q*q*q-q*q;
+    yawDeg=-60*h00+75*h11;
+    elevation=radians(b.stanceElevationDeg)
+      +(impactElevation-radians(b.stanceElevationDeg))*smoothstep(q);
   }else{
-    const q=clamp(raw,0,followRatio);
-    u=q+q*q/followRatio-q*q*q/(followRatio*followRatio);
+    // Match cubic first derivatives at the impact point in world time:
+    // (C-P2)/toImpactMs == (P1-C)/followMs.
+    const continuation=b.core.clone().addScaledVector(
+      b.core.clone().sub(b.approachC2),durationOut/durationIn);
+    core=cubic(b.core,continuation,b.finish,b.finish,q);
+    const h10=q*q*q-2*q*q+q,h01=-2*q*q*q+3*q*q;
+    yawDeg=75*durationOut/durationIn*h10+115*h01;
+    // Post-contact barrel elevation rises with the upward finish.
+    elevation=impactElevation
+      +(radians(24)-impactElevation)*smoothstep(q);
   }
-  // Torso/hand rotation starts sooner; rapid bat release follows. Both
-  // curves are continuous in angle AND angular velocity through contact.
-  // The offsets pin both curves to zero at the intended contact time.
-  const handYaw=radians(42*(Math.tanh(1.25*(u+.35))-ZERO_YAW_OFFSET));
-  const batYaw=radians(125*(Math.tanh(1.8*(u-.22))+ZERO_BARREL_OFFSET));
-  const hand=sw.bundle.pivot.clone().add(rotateY(sw.bundle.radius,handYaw));
-  // The barrel is cocked high in the loading posture and drops as the torso
-  // and hands begin moving. The launch elevation is a stance preference,
-  // NOT a fixed value measured for every batter.
-  const impactDir=sw.bundle.impact.dir;
-  const impactElevation=Math.asin(clamp(impactDir.y,-1,1));
-  const stanceElevation=radians(sw.bundle.stanceElevationDeg);
-  const loadRatio=clamp(-u,0,1);
-  const loadWeight=loadRatio*loadRatio*(3-2*loadRatio); // zero derivative at impact
-  // Small up-swing variation after the barrel is lowered; continuous at contact.
-  const elevation=impactElevation+(stanceElevation-impactElevation)*loadWeight
-    +.04*Math.tanh(u)*(1-loadWeight);
-  const horizontal=rotateY(new V3(impactDir.x,0,impactDir.z).normalize(),batYaw);
+  const horizontal=rotateY(
+    new V3(b.impact.dir.x,0,b.impact.dir.z).normalize(),radians(yawDeg));
   const dir=new V3(
-    horizontal.x*Math.cos(elevation),Math.sin(elevation),horizontal.z*Math.cos(elevation)
+    horizontal.x*Math.cos(elevation),Math.sin(elevation),
+    horizontal.z*Math.cos(elevation)
   ).normalize();
-  return{hand,dir,handYaw,batYaw,elevation};
+  // Derive hands from the actual sweet-spot trajectory so the visible bat,
+  // its core, and the collision segment cannot diverge.
+  const hand=core.clone().addScaledVector(dir,-SWEET_MID);
+  return{hand,dir,core};
 }
+
 export function sweetSegment(pose){
   return{
     a:pose.hand.clone().addScaledVector(pose.dir,SWEET_START),
