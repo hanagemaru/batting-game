@@ -268,7 +268,12 @@ function updatePose(){
  const handOffset=p.hand.distanceTo(sw.bundle.impact.hand);
  const phase=t<sw.launchStart?'準備（バットを立てた構えから下降）':
    t<sw.impactAt?'最終加速（操作後40ms相当）':'フォロースルー';
- el('hud').innerHTML='<strong>'+when+'</strong><div>'+phase+'</div><div>ヘッド速度 '+v.toFixed(1)+' m/s · 手元の移動 '+Math.round(handOffset*100)+'cm</div><div>芯の高さ：コンタクト比 '+(rise>=0?'+':'')+Math.round(rise*100)+'cm</div><div>球種 '+pitchNames[el('pitchType').value]+' · 構え '+el('stanceAngle').value+'°</div><div>横 '+Number(el('course').value).toFixed(2)+'m・高さ '+Number(el('height').value).toFixed(2)+'m</div>';
+ // 0° in top view means the bat is square across the plate (world X axis).
+ const topAngle=Math.atan2(p.dir.z,-p.dir.x)*180/Math.PI;
+ const o=sw.bundle.orientation;
+ const planeNormal=o.incomingControl.clone().cross(o.contact).normalize();
+ const planeError=t>=0?Math.asin(Math.min(1,Math.abs(p.dir.dot(planeNormal))))*180/Math.PI:null;
+ el('hud').innerHTML='<strong>'+when+'</strong><div>'+phase+'</div><div>上面からのバット角度 '+Math.round(topAngle)+'°（接触時0°）'+(planeError!==null?' · 振り抜き面のズレ '+planeError.toFixed(1)+'°':'')+'</div><div>ヘッド速度 '+v.toFixed(1)+' m/s · 手元の移動 '+Math.round(handOffset*100)+'cm</div><div>芯の高さ：コンタクト比 '+(rise>=0?'+':'')+Math.round(rise*100)+'cm</div><div>球種 '+pitchNames[el('pitchType').value]+' · 構え '+el('stanceAngle').value+'°</div><div>横 '+Number(el('course').value).toFixed(2)+'m・高さ '+Number(el('height').value).toFixed(2)+'m</div>';
  timeline.value=String(Math.round(progress*1000));
 }
 function setProgress(v){
