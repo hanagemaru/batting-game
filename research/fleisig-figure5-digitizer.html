@@ -274,6 +274,9 @@ function advance(){
  if(part==='grip')$('endSelect').value='tip';
  else if(panel==='top'){$('panelSelect').value='side';$('endSelect').value='grip'}
  else{$('panelSelect').value='top';$('endSelect').value='grip';$('sampleIndex').value=Math.min(120,selected+1);selected=ix();}
+ const next=samples[selected];
+ $('type').value=next?.type||'marker';
+ $('matched').checked=!!next?.matched;
 }
 function clickImage(e){
  if(!meta)return;
