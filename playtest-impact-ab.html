@@ -166,6 +166,22 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 </div>
 </div>
 
+<script>
+// Keep fatal rendering errors visible on mobile instead of silently appearing frozen.
+(function(){
+  function report(msg){
+    const hint=document.getElementById('aimHint');
+    if(!hint)return;
+    hint.textContent='実行エラー: '+String(msg||'詳細不明')+'（画面を記録してください）';
+    hint.style.color='#ffb8a7';
+    hint.style.borderColor='#ad6559';
+  }
+  window.addEventListener('error',function(e){report(e.message)});
+  window.addEventListener('unhandledrejection',function(e){
+    report(e.reason&&e.reason.message||String(e.reason));
+  });
+})();
+</script>
 <script type="importmap">
 {"imports":{
   "three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
