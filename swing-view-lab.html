@@ -79,8 +79,9 @@ select{min-height:33px;background:#122632;border:1px solid #43616c;border-radius
 <label>投球の球種<select id="pitchType"><option value="FAST">ストレート</option><option value="CURVE">カーブ</option><option value="FORK">フォーク</option></select></label>
 </div>
 <label class="options"><input type="checkbox" id="showPitchPath" checked> ボールの参考軌道を表示</label>
+<label class="options"><input type="checkbox" id="showWholeSwing" checked> 動作全体のバット姿勢を重ねる</label>
 <label class="options"><input type="checkbox" id="oldTrace"> 旧モデルのヘッド軌道も比較表示</label>
-<div class="note">実測研究を参考に、構え→バットを寝かせる準備動作→最終40msの加速→フォロースルーを表示。青＝グリップ、黄＝ヘッド、緑＝芯。手元は体の近くで回転します。旧ヘッド軌道と参考投球軌道は比較用です。</div>
+<div class="note">構えからインパクトまで、上下角度と左右回転を別々に補間せず、バットの3D姿勢全体を一続きの曲線で動かします。薄いバットの線は動作全体の姿勢のサンプルです。40msの操作反応は維持しています。</div>
 </section>
 </main>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
@@ -177,6 +178,28 @@ const orthographic=new THREE.OrthographicCamera(-1.7,1.7,1.7,-1.7,.02,30);
 const batterCamera=new THREE.PerspectiveCamera(80,1,.03,40);
 const viewButtons=[...document.querySelectorAll('[data-view]')];
 let activeView='rear',playing=true,lastTime=0,progress=0,sw=null;
+// Faint snapshots let the player judge the WHOLE barrel rotation,
+ // rather than the local tangent of a single colored trajectory.
+const wholeSwingGhosts=new THREE.Group();scene.add(wholeSwingGhosts);
+const ghostTimes=[0,.30,.57,.78,1];
+const ghostLines=ghostTimes.map((_,i)=>{
+ const line=new THREE.Line(new THREE.BufferGeometry(),
+   new THREE.LineBasicMaterial({
+     color:i===ghostTimes.length-1?0xffd99e:0x8de7b1,
+     transparent:true,opacity:.22,depthTest:true,depthWrite:false
+   }));
+ wholeSwingGhosts.add(line);return line;
+});
+function updateWholeSwingGhosts(){
+ const begin=sw.motionStart,span=sw.finishAt-begin;
+ ghostTimes.forEach((q,i)=>{
+   const pose=swingPoseAt(begin+span*q,sw);
+   const start=pose.hand.clone(),end=start.clone().addScaledVector(pose.dir,BAT_LENGTH);
+   ghostLines[i].geometry.dispose();
+   ghostLines[i].geometry=new THREE.BufferGeometry().setFromPoints([start,end]);
+ });
+ wholeSwingGhosts.visible=el('showWholeSwing').checked;
+}
 const traceGroups={};
 for(const [key,color] of [['grip',0x5bc0ff],['tip',0xffc269],['sweet',0x8de7b1],['old',0xd295ff]]){
  const line=new THREE.Line(new THREE.BufferGeometry(),
@@ -217,6 +240,7 @@ function changeAim(){
   if(key==='old')line.computeLineDistances();
  }
  traceGroups.old.visible=el('oldTrace').checked;
+ updateWholeSwingGhosts();
  const fraction=(0-sw.motionStart)/(sw.finishAt-sw.motionStart);
  el('impactMark').style.left=(fraction*100)+'%';
  updatePose();
@@ -292,6 +316,9 @@ for(const b of viewButtons)b.addEventListener('click',()=>setView(b.dataset.view
 for(const id of ['course','height','stanceAngle','pitchType'])el(id).addEventListener('change',()=>{setPlaying(false);changeAim()});
 el('showPitchPath').addEventListener('change',()=>{referencePitchPath.visible=el('showPitchPath').checked});
 el('oldTrace').addEventListener('change',()=>{traceGroups.old.visible=el('oldTrace').checked});
+el('showWholeSwing').addEventListener('change',()=>{
+  wholeSwingGhosts.visible=el('showWholeSwing').checked;
+});
 timeline.addEventListener('input',()=>{setPlaying(false);setProgress(Number(timeline.value)/1000)});
 playBtn.addEventListener('click',()=>setPlaying(!playing));
 el('back').addEventListener('click',()=>{setPlaying(false);setProgress(progress-5/(sw.finishAt-sw.motionStart))});
