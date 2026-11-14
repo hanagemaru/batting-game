@@ -72,64 +72,105 @@ function smootherstep(t){
   const q=clamp(t,0,1);
   return q*q*q*(10+q*(-15+6*q)); // zero velocity and acceleration at endpoints
 }
+// Construct complete 3D barrel direction poses. Both azimuth and elevation
+// are used only for defining *large-scale controls*. Actual motion is a single
+// spherical Bézier curve, not separately interpolated Euler angles.
+function directionAt(impactDir,yawDeg,elevationDeg){
+  const horizontal=rotateY(
+    new V3(impactDir.x,0,impactDir.z).normalize(),radians(yawDeg));
+  const elevation=radians(elevationDeg);
+  return new V3(
+    horizontal.x*Math.cos(elevation),Math.sin(elevation),
+    horizontal.z*Math.cos(elevation)
+  ).normalize();
+}
+function slerpUnit(a,b,t){
+  const dot=clamp(a.dot(b),-1,1);
+  if(dot>.99999)return a.clone().lerp(b,t).normalize();
+  // All design controls are far from antipodal; extension >1 only occurs
+  // when constructing the matched follow-through tangent.
+  const angle=Math.acos(dot),invSin=1/Math.sin(angle);
+  return a.clone().multiplyScalar(Math.sin((1-t)*angle)*invSin)
+    .addScaledVector(b,Math.sin(t*angle)*invSin).normalize();
+}
+function sphericalBezier(a,b,c,d,q){
+  const p=slerpUnit(a,b,q),r=slerpUnit(b,c,q),v=slerpUnit(c,d,q);
+  const w=slerpUnit(p,r,q),x=slerpUnit(r,v,q);
+  return slerpUnit(w,x,q);
+}
 export function swingPoseBundle(x,y,stanceElevationDeg=DEFAULT_STANCE_ELEVATION_DEG){
   const impact=impactBatPose(x,y);
-  // A short curved grip path with the body/arms pivot close to the hitter.
   const handPivot=impact.hand.clone().add(new V3(.32,0,.15));
   const handRadius=impact.hand.clone().sub(handPivot);
-  return{impact,handPivot,handRadius,
-    stanceElevationDeg:clamp(Number(stanceElevationDeg)||DEFAULT_STANCE_ELEVATION_DEG,45,85)};
+  const stance=clamp(Number(stanceElevationDeg)||DEFAULT_STANCE_ELEVATION_DEG,45,85);
+  const impactElevation=THREE.MathUtils.radToDeg(
+    Math.asin(clamp(impact.dir.y,-1,1)));
+  const first=directionAt(impact.dir,-100,stance);
+  const second=directionAt(impact.dir,-100,stance-4);
+  // "Slot" control: slightly below the contact plane and still trailing.
+  // This produces a smooth 3D drop-and-turn over the full loading interval.
+  const incomingControl=directionAt(impact.dir,-75,
+    clamp(impactElevation-9,-58,-8));
+  const contact=impact.dir.clone();
+  // Match angular velocity at contact, accounting for different branch
+  // durations and time-warp derivatives (1.4 before, 2.0 after).
+  const followRatio=BASE_FOLLOW_THROUGH_MS/
+    (BASE_PREP_MS+BASE_TO_CONTACT_MS);
+  const afterContactControl=slerpUnit(incomingControl,contact,
+    1+followRatio*1.4/2);
+  const followControl=directionAt(impact.dir,110,
+    clamp(impactElevation+18,-30,15));
+  const followEnd=directionAt(impact.dir,145,20);
+  return{
+    impact,handPivot,handRadius,stanceElevationDeg:stance,
+    orientation:{first,second,incomingControl,contact,afterContactControl,
+      followControl,followEnd}
+  };
 }
 export function swingPoseAt(ms,sw){
   const t=clamp(ms,sw.motionStart,sw.finishAt??(sw.impactAt+sw.followMs));
   const prepMs=sw.prepMs??(BASE_PREP_MS/2);
   const launchStart=sw.launchStart??(sw.impactAt-sw.toImpactMs);
-  const impactElevation=THREE.MathUtils.radToDeg(Math.asin(clamp(sw.bundle.impact.dir.y,-1,1)));
-  let gripPhase,yawDeg,elevationDeg,gripLift;
+  const beforeContact=t<=sw.impactAt;
+  let gripPhase,gripLift;
   if(t<=launchStart){
-    // Preparation: stand the bat upright, then smoothly slot it down.
-    const elapsed=t-sw.motionStart;
-    const rate=110/Math.max(1,prepMs);
+    const elapsed=t-sw.motionStart,rate=110/Math.max(1,prepMs);
     gripPhase=hermite(-.75,-.48,0,.002*rate,elapsed,prepMs);
-    yawDeg=hermite(-100,-65,0,.18*rate,elapsed,prepMs);
-    // Elevation now comes from one smooth curve over the entire approach.
     gripLift=hermite(.05,.015,0,-.0004*rate,elapsed,prepMs);
-  }else if(t<=sw.impactAt){
-    // The last 40ms at default game speed: wrists release the barrel rapidly.
-    const elapsed=t-launchStart,dur=sw.toImpactMs;
-    // Scale rates with game speed so changing speed doesn't reshape the arc.
-    const rate=40/Math.max(1,dur);
+  }else if(beforeContact){
+    const elapsed=t-launchStart,dur=sw.toImpactMs,
+      rate=40/Math.max(1,dur);
     gripPhase=hermite(-.48,0,.002*rate,.009*rate,elapsed,dur);
-    yawDeg=hermite(-65,0,.18*rate,2.4*rate,elapsed,dur);
-    // Avoid a pitch-angle kink where the final acceleration begins.
     gripLift=hermite(.015,0,-.0004*rate,0,elapsed,dur);
   }else{
-    const elapsed=t-sw.impactAt,dur=sw.followMs;
-    const rate=110/Math.max(1,dur);
+    const elapsed=t-sw.impactAt,dur=sw.followMs,
+      rate=110/Math.max(1,dur);
     gripPhase=hermite(0,.65,.009*rate,0,elapsed,dur);
-    yawDeg=hermite(0,135,2.4*rate,0,elapsed,dur);
-    elevationDeg=impactElevation+(10-impactElevation)*smootherstep(elapsed/Math.max(1,dur));
     gripLift=hermite(0,.04,0,0,elapsed,dur);
-  }
-  if(t<=sw.impactAt){
-    // One C2-continuous barrel lowering motion from vertical stance through
-    // the launch boundary to the contact swing plane.
-    const fullPrep=Math.max(1,sw.impactAt-sw.motionStart);
-    elevationDeg=sw.bundle.stanceElevationDeg+
-      (impactElevation-sw.bundle.stanceElevationDeg)*
-      smootherstep((t-sw.motionStart)/fullPrep);
   }
   const grip=sw.bundle.handPivot.clone()
     .add(rotateY(sw.bundle.handRadius,gripPhase));
   grip.y+=gripLift;
-  const impactDir=sw.bundle.impact.dir;
-  const horizontal=rotateY(
-    new V3(impactDir.x,0,impactDir.z).normalize(),radians(yawDeg));
-  const e=radians(elevationDeg);
-  const dir=new V3(
-    horizontal.x*Math.cos(e),Math.sin(e),horizontal.z*Math.cos(e)
-  ).normalize();
-  return{hand:grip,dir,gripPhase,yawDeg,elevationDeg};
+
+  const o=sw.bundle.orientation;
+  let dir;
+  if(beforeContact){
+    // One global rotation from upright stance to contact.
+    // An accelerated time map keeps contact speed nonzero, while startup
+    // is gentle; crucially there is NO orientation keyframe at launchStart.
+    const total=Math.max(1,sw.impactAt-sw.motionStart);
+    const progress=clamp((t-sw.motionStart)/total,0,1);
+    const q=Math.pow(progress,1.4);
+    dir=sphericalBezier(o.first,o.second,o.incomingControl,o.contact,q);
+  }else{
+    const progress=clamp((t-sw.impactAt)/Math.max(1,sw.followMs),0,1);
+    // Derivative starts at 2 and finishes at 0, meeting the incoming
+    // angular tangent and gently stopping the follow-through.
+    const q=2*progress-progress*progress;
+    dir=sphericalBezier(o.contact,o.afterContactControl,
+      o.followControl,o.followEnd,q);
+  }
+  return{hand:grip,dir,gripPhase};
 }
 
 export function sweetSegment(pose){
