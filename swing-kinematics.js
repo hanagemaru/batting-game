@@ -110,8 +110,10 @@ export function swingPoseBundle(x,y,stanceElevationDeg=DEFAULT_STANCE_ELEVATION_
   const second=directionAt(impact.dir,-100,stance-4);
   // "Slot" control: slightly below the contact plane and still trailing.
   // This produces a smooth 3D drop-and-turn over the full loading interval.
-  const incomingControl=directionAt(impact.dir,-75,
-    clamp(impactElevation-9,-58,-8));
+  // Keep the incoming tangent close to the intended swing plane. A milder
+  // approach improves the follow-through slope without changing contact.
+  const incomingControl=directionAt(impact.dir,-65,
+    clamp(impactElevation+3,-58,-8));
   const contact=impact.dir.clone();
   // Match angular velocity at contact, accounting for different branch
   // durations and time-warp derivatives (1.4 before, 2.0 after).
@@ -122,10 +124,13 @@ export function swingPoseBundle(x,y,stanceElevationDeg=DEFAULT_STANCE_ELEVATION_
   // Continue the SAME great-circle swing plane defined by the last
   // incoming control and contact direction. Do not force independent
   // high/east finish orientations that break the preceding swing plane.
+  // Retain the exact incoming tangent at contact, then finish in the SAME
+  // great-circle plane with a shorter angular sweep. The previous finish
+  // ran almost 100 degrees beyond contact, which over-lifted the barrel.
   const followControl=slerpUnit(incomingControl,contact,
-    1+followRatio*1.4);
+    1+followRatio*1.4*.85);
   const followEnd=slerpUnit(incomingControl,contact,
-    1+followRatio*1.4*1.5);
+    1+followRatio*1.4*1.10);
   return{
     impact,handPivot,handRadius,stanceElevationDeg:stance,
     orientation:{first,second,incomingControl,contact,afterContactControl,
