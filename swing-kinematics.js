@@ -58,13 +58,19 @@ export function impactBatPose(x,y){
 // The game starts the final quick phase on release; the full 3-phase motion
 // from upright stance can be inspected in the three-camera lab.
 
-// Cubic Hermite interpolation with endpoint velocities in units per ms.
-// This guarantees continuity at the preparation -> launch -> follow joins.
+// Quintic Hermite: adjacent phases match position, angular velocity and
+// angular acceleration, eliminating the snap of the old cubic keyframes.
 function hermite(a,b,va,vb,elapsed,duration){
   const q=clamp(elapsed/Math.max(.001,duration),0,1);
-  const q2=q*q,q3=q2*q,dt=duration;
-  return (2*q3-3*q2+1)*a+(q3-2*q2+q)*va*dt
-       +(-2*q3+3*q2)*b+(q3-q2)*vb*dt;
+  const dt=duration,d=b-a,
+    c3=10*d-(6*va+4*vb)*dt,
+    c4=-15*d+(8*va+7*vb)*dt,
+    c5=6*d-(3*va+3*vb)*dt;
+  return a+va*dt*q+c3*q*q*q+c4*q*q*q*q+c5*q*q*q*q*q;
+}
+function smootherstep(t){
+  const q=clamp(t,0,1);
+  return q*q*q*(10+q*(-15+6*q)); // zero velocity and acceleration at endpoints
 }
 export function swingPoseBundle(x,y,stanceElevationDeg=DEFAULT_STANCE_ELEVATION_DEG){
   const impact=impactBatPose(x,y);
@@ -85,8 +91,8 @@ export function swingPoseAt(ms,sw){
     const elapsed=t-sw.motionStart;
     const rate=110/Math.max(1,prepMs);
     gripPhase=hermite(-.75,-.48,0,.002*rate,elapsed,prepMs);
-    yawDeg=hermite(100,65,0,-.18*rate,elapsed,prepMs);
-    elevationDeg=hermite(sw.bundle.stanceElevationDeg,-10,0,-.25*rate,elapsed,prepMs);
+    yawDeg=hermite(-100,-65,0,.18*rate,elapsed,prepMs);
+    // Elevation now comes from one smooth curve over the entire approach.
     gripLift=hermite(.05,.015,0,-.0004*rate,elapsed,prepMs);
   }else if(t<=sw.impactAt){
     // The last 40ms at default game speed: wrists release the barrel rapidly.
@@ -94,16 +100,24 @@ export function swingPoseAt(ms,sw){
     // Scale rates with game speed so changing speed doesn't reshape the arc.
     const rate=40/Math.max(1,dur);
     gripPhase=hermite(-.48,0,.002*rate,.009*rate,elapsed,dur);
-    yawDeg=hermite(65,0,-.18*rate,-2.4*rate,elapsed,dur);
-    elevationDeg=hermite(-10,impactElevation,-.25*rate,.22*rate,elapsed,dur);
+    yawDeg=hermite(-65,0,.18*rate,2.4*rate,elapsed,dur);
+    // Avoid a pitch-angle kink where the final acceleration begins.
     gripLift=hermite(.015,0,-.0004*rate,0,elapsed,dur);
   }else{
     const elapsed=t-sw.impactAt,dur=sw.followMs;
     const rate=110/Math.max(1,dur);
     gripPhase=hermite(0,.65,.009*rate,0,elapsed,dur);
-    yawDeg=hermite(0,-135,-2.4*rate,0,elapsed,dur);
-    elevationDeg=hermite(impactElevation,10,.22*rate,0,elapsed,dur);
+    yawDeg=hermite(0,135,2.4*rate,0,elapsed,dur);
+    elevationDeg=impactElevation+(10-impactElevation)*smootherstep(elapsed/Math.max(1,dur));
     gripLift=hermite(0,.04,0,0,elapsed,dur);
+  }
+  if(t<=sw.impactAt){
+    // One C2-continuous barrel lowering motion from vertical stance through
+    // the launch boundary to the contact swing plane.
+    const fullPrep=Math.max(1,sw.impactAt-sw.motionStart);
+    elevationDeg=sw.bundle.stanceElevationDeg+
+      (impactElevation-sw.bundle.stanceElevationDeg)*
+      smootherstep((t-sw.motionStart)/fullPrep);
   }
   const grip=sw.bundle.handPivot.clone()
     .add(rotateY(sw.bundle.handRadius,gripPhase));
