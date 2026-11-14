@@ -72,7 +72,7 @@ tr[role=button]{cursor:pointer}
  <div class="panel"><h2>復元できた線の3Dプレビュー</h2>
   <div class="sampleView"><svg id="preview" viewBox="0 0 500 195" aria-label="上下視点を組み合わせたバット軌道"></svg></div>
   <div class="row"><label>3Dの表示角 <input type="range" id="viewAngle" min="-140" max="140" step="5" value="40"><output id="viewAngleLabel">40°</output></label></div>
-  <p class="note">2方向の同時刻対応を確認した線のみ緑で表示します。未照合データから連続3Dモーションを生成しません。</p>
+  <p class="note">灰破線は太線を視認で仮置きした<strong>未照合の3D候補</strong>です（手元・先端それぞれ約8〜11cmのX値不一致）。緑は同一時刻を確認した線のみ。未照合データから連続3Dモーションを生成しません。</p>
  </div>
 </div>
 <div>
@@ -218,6 +218,21 @@ function preview(){
   const p=project(origin),q=project(a.v);
   svg.append(el('line',{x1:p[0],y1:p[1],x2:q[0],y2:q[1],stroke:a.color,'stroke-width':1.3,opacity:.6}));
   const t=el('text',{x:q[0]+3,y:q[1]-3,fill:a.color,'font-size':12});t.textContent=a.name;svg.append(t);
+ }
+ if($('showCandidate').checked&&meta.initialAnnotation){
+  const c=meta.initialAnnotation,raw={};
+  for(const key of ['grip','barrel']){
+    const label=key==='grip'?'gripPx':'barrelPx';
+    const t=imageToWorld('top',c.top[label]);
+    const r=imageToWorld('side',c.side[label]);
+    raw[key]=[(t.x+r.x)/2,t.y,r.z];
+  }
+  const a=project(raw.grip),b=project(raw.barrel);
+  svg.append(el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],
+    stroke:'#a1abb3','stroke-width':2,'stroke-dasharray':'6 5',opacity:.9}));
+  const label=el('text',{x:250,y:17,'text-anchor':'middle',
+    fill:'#bec9d1','font-size':11});
+  label.textContent='灰破線＝試読候補（X値不一致・3D未確定）';svg.append(label);
  }
  for(const {k,sol} of confirmed){
   const a=project(sol.pts.grip),b=project(sol.pts.tip);
