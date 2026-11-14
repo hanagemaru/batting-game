@@ -241,7 +241,10 @@ function updatePose(){
  const impact=sw.bundle.impact;
  const origin=impact.hand.clone().addScaledVector(impact.dir,(SWEET_START+SWEET_END)/2);
  const rise=core.y-origin.y;
- el('hud').innerHTML='<strong>'+when+'</strong><div>ヘッド速度 '+v.toFixed(1)+' m/s</div><div>芯の高さ：コンタクト比 '+(rise>=0?'+':'')+Math.round(rise*100)+'cm</div><div>球種 '+pitchNames[el('pitchType').value]+' · 構え '+el('stanceAngle').value+'°</div><div>横 '+Number(el('course').value).toFixed(2)+'m・高さ '+Number(el('height').value).toFixed(2)+'m</div>';
+ const handOffset=p.hand.distanceTo(sw.bundle.impact.hand);
+ const phase=t<sw.launchStart?'準備（バットを立てた構えから下降）':
+   t<sw.impactAt?'最終加速（操作後40ms相当）':'フォロースルー';
+ el('hud').innerHTML='<strong>'+when+'</strong><div>'+phase+'</div><div>ヘッド速度 '+v.toFixed(1)+' m/s · 手元の移動 '+Math.round(handOffset*100)+'cm</div><div>芯の高さ：コンタクト比 '+(rise>=0?'+':'')+Math.round(rise*100)+'cm</div><div>球種 '+pitchNames[el('pitchType').value]+' · 構え '+el('stanceAngle').value+'°</div><div>横 '+Number(el('course').value).toFixed(2)+'m・高さ '+Number(el('height').value).toFixed(2)+'m</div>';
  timeline.value=String(Math.round(progress*1000));
 }
 function setProgress(v){
