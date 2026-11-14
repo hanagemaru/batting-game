@@ -74,14 +74,19 @@ select{min-height:33px;background:#122632;border:1px solid #43616c;border-radius
 <label>横方向（右打者基準）<select id="course"><option value="0">真ん中</option><option value=".15">インコース</option><option value="-.15">アウトコース</option></select></label>
 <label>高さ<select id="height"><option value=".84">真ん中</option><option value="1.07">高め</option><option value=".60">低め</option></select></label>
 </div>
+<div class="fields">
+<label>構えたバットの角度<select id="stanceAngle"><option value="50">50°（やや寝かせる）</option><option value="70" selected>70°（標準）</option><option value="82">82°（ほぼ垂直）</option></select></label>
+<label>投球の球種<select id="pitchType"><option value="FAST">ストレート</option><option value="CURVE">カーブ</option><option value="FORK">フォーク</option></select></label>
+</div>
+<label class="options"><input type="checkbox" id="showPitchPath" checked> ボールの参考軌道を表示</label>
 <label class="options"><input type="checkbox" id="oldTrace"> 旧モデルのヘッド軌道も比較表示</label>
-<div class="note">色の線は全スイングの軌跡、実物のバットは現在時刻の位置です。黄色い印がインパクト時刻です。旧モデルは比較専用で、ゲームの判定には使いません。</div>
+<div class="note">色の線はスイング軌跡。太い空色の線は選んだ球種の参考投球軌道（投球タイミングは同期していません）。構えたバットの角度は選べます。旧モデルは比較専用です。</div>
 </section>
 </main>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
-import {PLATE_HALF,PLATE_FRONT} from './pitch-model.js';
+import {PLATE_HALF,PLATE_FRONT,pitchPoint} from './pitch-model.js';
 import {BAT_LENGTH,SWEET_START,SWEET_END,IMPACT_SLOPE,
  impactBatPose,swingAtAim,swingPoseAt,rotateY} from './swing-kinematics.js';
 
@@ -129,6 +134,32 @@ scene.add(batGroup);
 const ball=new THREE.Mesh(new THREE.SphereGeometry(.0365,16,12),
  new THREE.MeshStandardMaterial({color:0xffffff,transparent:true,opacity:.75}));
 scene.add(ball);
+// A near-plate reference pitch line from the same pitchPoint() as the game.
+const referencePitchPath=new THREE.Line(
+ new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
+ new THREE.LineBasicMaterial({color:0xafdfff,transparent:true,opacity:.82,depthWrite:false})
+);
+scene.add(referencePitchPath);
+const pitchColors={FAST:0xd9f1ff,CURVE:0x9fd7ff,FORK:0xffd99d};
+const pitchNames={FAST:'ストレート',CURVE:'カーブ',FORK:'フォーク'};
+function updateReferencePitch(x,y){
+ const type=el('pitchType').value;
+ const pitch={
+  type,target:{x,y,z:PLATE_FRONT},
+  release:{x:.18,y:1.82,z:16.8},
+  dir:1,breakX:.25,breakY:type==='CURVE'?.10:type==='FORK'?.19:.055
+ };
+ const points=[];
+ for(let i=0;i<=96;i++){
+  const u=.70+.30*i/96;
+  const pos=pitchPoint(pitch,u);
+  points.push(new THREE.Vector3(pos.x,pos.y,pos.z));
+ }
+ referencePitchPath.geometry.dispose();
+ referencePitchPath.geometry=new THREE.BufferGeometry().setFromPoints(points);
+ referencePitchPath.material.color.setHex(pitchColors[type]);
+ referencePitchPath.visible=el('showPitchPath').checked;
+}
 
 const impactPlanePts=[
  [-.38,.35], [.38,.35],[.38,1.34],[-.38,1.34]
@@ -165,8 +196,9 @@ function oldPose(t,track){
 }
 function changeAim(){
  const x=Number(el('course').value),y=Number(el('height').value);
- sw=swingAtAim(x,y,2,0);
+ sw=swingAtAim(x,y,2,0,Number(el('stanceAngle').value));
  ball.position.copy(impactBatPose(x,y).contact);
+ updateReferencePitch(x,y);
  const tracks={grip:[],tip:[],sweet:[],old:[]};
  const n=200;
  for(let i=0;i<=n;i++){
@@ -205,7 +237,7 @@ function updatePose(){
  const v1=tipSpeedA.hand.clone().addScaledVector(tipSpeedA.dir,BAT_LENGTH);
  const v2=tipSpeedB.hand.clone().addScaledVector(tipSpeedB.dir,BAT_LENGTH);
  const v=v1.distanceTo(v2)*1000/Math.max(1,Math.min(t+1,sw.finishAt)-Math.max(t-1,sw.motionStart));
- el('hud').innerHTML='<strong>'+when+'</strong><div>ヘッド速度 '+v.toFixed(1)+' m/s</div><div>横 '+Number(el('course').value).toFixed(2)+'m・高さ '+Number(el('height').value).toFixed(2)+'m</div>';
+ el('hud').innerHTML='<strong>'+when+'</strong><div>ヘッド速度 '+v.toFixed(1)+' m/s</div><div>球種 '+pitchNames[el('pitchType').value]+' · 構え '+el('stanceAngle').value+'°</div><div>横 '+Number(el('course').value).toFixed(2)+'m・高さ '+Number(el('height').value).toFixed(2)+'m</div>';
  timeline.value=String(Math.round(progress*1000));
 }
 function setProgress(v){
@@ -250,7 +282,8 @@ function updateCamera(){
  }
 }
 for(const b of viewButtons)b.addEventListener('click',()=>setView(b.dataset.view));
-for(const id of ['course','height'])el(id).addEventListener('change',()=>{setPlaying(false);changeAim()});
+for(const id of ['course','height','stanceAngle','pitchType'])el(id).addEventListener('change',()=>{setPlaying(false);changeAim()});
+el('showPitchPath').addEventListener('change',()=>{referencePitchPath.visible=el('showPitchPath').checked});
 el('oldTrace').addEventListener('change',()=>{traceGroups.old.visible=el('oldTrace').checked});
 timeline.addEventListener('input',()=>{setPlaying(false);setProgress(Number(timeline.value)/1000)});
 playBtn.addEventListener('click',()=>setPlaying(!playing));
