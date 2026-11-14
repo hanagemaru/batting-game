@@ -266,3 +266,36 @@ contact speeds. **iPhone Safari runtime has not yet been retested.**
 - `swing-view-lab.html` – shows sweet-core Y offset from contact while
   stepping through the swing.
 - `playtest-impact-ab.html` – same shared kinematics, same 3D scanner.
+
+## 2026-11-14: swing direction and upright-to-disc smoothness correction
+
+The user confirmed the grip-constrained model is substantially closer to
+baseball, but its barrel rotates the wrong way and the transition from an
+upright bat into the swing plane shows a sharp angular kink.
+
+Changes to the shared swing-kinematics.js:
+- Reverse barrel **yaw** sequence from +100/+65/0/-135 degrees to
+  -100/-65/0/+135 degrees. This directs the barrel from behind the hitter
+  toward the pitcher instead of the reverse. The compact grip motion remains
+  anchored to the hitter, and the impact pose is still exactly preserved.
+- Use a **single quintic smootherstep pitch-elevation curve** from stance
+  angle to actual impact elevation, rather than two independently interpolated
+  angles meeting at launchStart. It has continuous first and second
+  derivatives through launchStart and zero pitch-angle velocity and
+  acceleration at impact.
+- Replace piecewise cubic Hermite for yaw/grip/lift with quintic Hermite
+  matched in value and velocity and zero second derivatives at phase joins.
+  This reduces visible angular acceleration jumps.
+- Input release to impact remains 40ms at default game speed 2x.
+
+Numerical regression:
+- Test center, high-inside, low-outside at 1x, 2x, and 4x.
+- Barrel yaw monotonic increases through all three phases; no reversal.
+- Impact grip and barrel direction exactly match the target pose (within
+  floating point tolerance).
+- Max grip excursion remains about 0.264m across all cases.
+- Phase join local derivative discontinuities below numerical tolerances.
+- Gameplay and lab import the same shared module, with no changes to the
+  physical collision scanner, saved camera, pitch cadence or bat/ball
+  collision response functions.
+- Live Safari runtime still needs validation on a device.
