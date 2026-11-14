@@ -147,3 +147,59 @@ IDs exist. The exact collision scanner and batted-ball physics functions
 remain unchanged. Numerical pose tests confirm exact contact alignment,
 near-zero start/end velocities, upright starting elevation, and expected
 contact speeds. **iPhone Safari runtime has not yet been retested.**
+
+## 2026-11-14: near-linear incoming sweet-spot path and rising follow-through
+
+### Request and resolution
+- User requested the **bat's sweet spot** (not the bat tip or grip)
+  to approach the selected ball-contact point more linearly.
+- After contact, the center of the sweet spot should ascend in world Y,
+  resembling an upward exit from the swing plane.
+- The preceding 110ms launch-to-contact time was too long. Restore a shorter
+  than original 50ms default: **40ms at the default 2x swing speed**.
+  The `BASE_TO_CONTACT_MS` constant is now 80; user-facing duration is
+  `BASE_TO_CONTACT_MS / speed`.
+- The phrase "50 microseconds" in the request was treated as a likely
+  unit slip for the original 50 **milliseconds**, which are the time units
+  used throughout the game.
+
+### New geometry (procedural, not empirical motion capture)
+- Define the contact core exactly from the existing impact bat pose:
+  `impact.hand + impact.dir * (SWEET_START+SWEET_END)/2`.
+- Incoming phase: a cubic Bézier path anchored from the batter-side,
+  moderately high and behind the contact position, into the impact core.
+  Its path is close to a straight line in three dimensions with a shallow
+  dip and positive Y velocity at the instant of contact.
+- Outgoing phase: a second cubic Bézier follows the same contact velocity
+  **in direction and magnitude**, then arcs into upward world Y through
+  the finish.
+- Direction/elevation of the bat are computed separately, from an
+  upright 70-degree launch posture to the exact impact orientation,
+  and then into follow-through. Grip position is derived from the chosen
+  core and direction, rather than independently animated. Hence the
+  collision segment, visible bat and the trajectory display agree.
+- Both phases have continuous core position and first time derivative
+  at impact. Nominal end behavior eases to rest.
+- The new sweep runs through the same `swingPoseAt()` module in both game
+  and three-view diagnostic. 3D collision and hit physics function bodies
+  were not modified.
+
+### Numeric checks (default 2x speed, center, inside/high, outside/low)
+- Release-to-contact: **40ms**.
+- At impact: grip and bat orientation agree with original
+  `impactBatPose` within floating point precision.
+- Starting barrel elevation: **70°** (also 50°/82° diagnostic options).
+- Sampled incoming path-length / straight-chord ratio: ~**1.022**.
+- Sweet-spot height relative to contact: **+0.26m** at +40ms,
+  **+0.55m** at +80ms.
+- Core speed through contact: ~**24.9m/s**, tip speed ~**25m/s**.
+- Contact core velocity is continuous; first-derivative hand and bat
+  orientation continuity is designed by interpolation.
+- Physical iPhone/Safari test remains pending; geometric values do not
+  establish that the new shape will look natural in the player camera.
+
+### Files
+- `swing-kinematics.js` – core Bézier approach and rising finish.
+- `swing-view-lab.html` – shows sweet-core Y offset from contact while
+  stepping through the swing.
+- `playtest-impact-ab.html` – same shared kinematics, same 3D scanner.
