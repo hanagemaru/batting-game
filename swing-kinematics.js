@@ -44,9 +44,10 @@ export function rotateY(v,a){
 export function impactBatPose(x,y){
   const inside=clamp((x+PLATE_HALF)/(2*PLATE_HALF),0,1);
   const tilt=barrelAngle(x,y);
-  const forward=radians(10+25*inside);
+  // At the selected (x,y) impact depth, the bat points horizontally across
+  // the plate in TOP VIEW. Pitch/vertical barrel tilt is preserved.
   const h=Math.cos(tilt);
-  const dir=new V3(-h*Math.cos(forward),-Math.sin(tilt),h*Math.sin(forward)).normalize();
+  const dir=new V3(-h,-Math.sin(tilt),0).normalize();
   const contact=new V3(x,y,idealImpactZ(x));
   const hand=contact.clone().addScaledVector(dir,-GRIP_TO_CONTACT);
   return{hand,dir,contact};
@@ -118,9 +119,13 @@ export function swingPoseBundle(x,y,stanceElevationDeg=DEFAULT_STANCE_ELEVATION_
     (BASE_PREP_MS+BASE_TO_CONTACT_MS);
   const afterContactControl=slerpUnit(incomingControl,contact,
     1+followRatio*1.4/2);
-  const followControl=directionAt(impact.dir,110,
-    clamp(impactElevation+18,-30,15));
-  const followEnd=directionAt(impact.dir,145,20);
+  // Continue the SAME great-circle swing plane defined by the last
+  // incoming control and contact direction. Do not force independent
+  // high/east finish orientations that break the preceding swing plane.
+  const followControl=slerpUnit(incomingControl,contact,
+    1+followRatio*1.4);
+  const followEnd=slerpUnit(incomingControl,contact,
+    1+followRatio*1.4*1.5);
   return{
     impact,handPivot,handRadius,stanceElevationDeg:stance,
     orientation:{first,second,incomingControl,contact,afterContactControl,
