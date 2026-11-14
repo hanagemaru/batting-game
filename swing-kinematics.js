@@ -18,7 +18,8 @@ export const BAT_LENGTH=.864;
 export const GRIP_TO_CONTACT=.72;
 export const SWEET_START=.56;
 export const SWEET_END=.82;
-export const BASE_TO_CONTACT_MS=100;
+export const BASE_TO_CONTACT_MS=220; // 110 ms to contact at default 2x; includes barrel drop from launch posture.
+export const DEFAULT_STANCE_ELEVATION_DEG=70; // Adjustable; no universal batting stance exists.
 export const BASE_FOLLOW_THROUGH_MS=220;
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -49,13 +50,13 @@ export function impactBatPose(x,y){
   const hand=contact.clone().addScaledVector(dir,-GRIP_TO_CONTACT);
   return{hand,dir,contact};
 }
-export function swingPoseBundle(x,y){
+export function swingPoseBundle(x,y,stanceElevationDeg=DEFAULT_STANCE_ELEVATION_DEG){
   const impact=impactBatPose(x,y);
   // Shoulder/torso surrogate is offset from impact grip; motion of the grip
   // traces a short curved arc around it instead of translating linearly.
   const pivot=impact.hand.clone().add(new V3(.28,-.035,-.05));
   const radius=impact.hand.clone().sub(pivot);
-  return{impact,pivot,radius};
+  return{impact,pivot,radius,stanceElevationDeg:clamp(Number(stanceElevationDeg)||DEFAULT_STANCE_ELEVATION_DEG,45,85)};
 }
 export function swingPoseAt(ms,sw){
   const t=clamp(ms,sw.motionStart,sw.impactAt+sw.followMs);
@@ -77,11 +78,22 @@ export function swingPoseAt(ms,sw){
   const handYaw=radians(42*(Math.tanh(1.25*(u+.35))-ZERO_YAW_OFFSET));
   const batYaw=radians(105*(Math.tanh(1.2*(u-.22))+ZERO_BARREL_OFFSET));
   const hand=sw.bundle.pivot.clone().add(rotateY(sw.bundle.radius,handYaw));
-  const dir=rotateY(sw.bundle.impact.dir,batYaw);
-  // A mild vertical component (zero at contact) provides a non-planar path.
-  dir.y+=.055*Math.tanh(.9*u);
-  dir.normalize();
-  return{hand,dir,handYaw,batYaw};
+  // The barrel is cocked high in the loading posture and drops as the torso
+  // and hands begin moving. The launch elevation is a stance preference,
+  // NOT a fixed value measured for every batter.
+  const impactDir=sw.bundle.impact.dir;
+  const impactElevation=Math.asin(clamp(impactDir.y,-1,1));
+  const stanceElevation=radians(sw.bundle.stanceElevationDeg);
+  const loadRatio=clamp(-u,0,1);
+  const loadWeight=loadRatio*loadRatio*(3-2*loadRatio); // zero derivative at impact
+  // Small up-swing variation after the barrel is lowered; continuous at contact.
+  const elevation=impactElevation+(stanceElevation-impactElevation)*loadWeight
+    +.04*Math.tanh(u)*(1-loadWeight);
+  const horizontal=rotateY(new V3(impactDir.x,0,impactDir.z).normalize(),batYaw);
+  const dir=new V3(
+    horizontal.x*Math.cos(elevation),Math.sin(elevation),horizontal.z*Math.cos(elevation)
+  ).normalize();
+  return{hand,dir,handYaw,batYaw,elevation};
 }
 export function sweetSegment(pose){
   return{
@@ -100,6 +112,6 @@ export function swingTiming(speed=2,impactAt=0){
   return{motionStart:impactAt-toImpactMs,impactAt,toImpactMs,followMs,
     finishAt:impactAt+followMs};
 }
-export function swingAtAim(x,y,speed=2,impactAt=0){
-  return{bundle:swingPoseBundle(x,y),...swingTiming(speed,impactAt)};
+export function swingAtAim(x,y,speed=2,impactAt=0,stanceElevationDeg=DEFAULT_STANCE_ELEVATION_DEG){
+  return{bundle:swingPoseBundle(x,y,stanceElevationDeg),...swingTiming(speed,impactAt)};
 }
