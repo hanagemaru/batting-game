@@ -12,7 +12,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);c
 body{display:flex;justify-content:center}
 .app{width:min(100%,620px);height:100dvh;display:grid;grid-template-rows:54px 1fr 58px;background:#05090d}
 header{display:grid;grid-template-columns:78px 1fr 92px;align-items:center;padding:max(6px,env(safe-area-inset-top)) 10px 4px;border-bottom:1px solid var(--line);background:#081017e8;z-index:4}
-.hlabel{font-size:8px;color:#7f919f;letter-spacing:.12em}.hvalue{font-size:17px;font-weight:900;margin-top:2px}.center{text-align:center}.title{font-size:11px;font-weight:900;letter-spacing:.12em}.pitchname{font-size:8px;color:#aebbc5;margin-top:3px}.right{text-align:right}
+.hlabel{font-size:8px;color:#7f919f;letter-spacing:.12em}.hvalue{font-size:17px;font-weight:900;margin-top:2px}.center{text-align:center}.title{font-size:11px;font-weight:900;letter-spacing:.12em}.pitchname{font-size:10px;color:#aebbc5;margin-top:3px}.right{text-align:right}
 .stage{position:relative;min-height:0;overflow:hidden;background:#071017}
 canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 .result{position:absolute;top:18%;left:50%;transform:translateX(-50%);width:min(90%,420px);padding:14px 12px;border:1px solid #537182;border-radius:6px;background:#07141fe9;box-shadow:0 5px 22px #000a;font:900 29px/1.25 system-ui,sans-serif;text-align:center;pointer-events:none;opacity:0;z-index:3}
@@ -84,9 +84,9 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
       <label class="devField">球種
         <select id="pitchMode">
           <option value="RANDOM">RANDOM</option>
-          <option value="FAST">FAST</option>
-          <option value="CURVE">CURVE</option>
-          <option value="FORK">FORK</option>
+          <option value="FAST">ストレート (FAST)</option>
+          <option value="CURVE">カーブ (CURVE)</option>
+          <option value="FORK">フォーク (FORK)</option>
         </select>
       </label>
       <label class="devField">コース（右打者基準）
@@ -252,6 +252,46 @@ rubber.position.set(0,.018,18.44+3*INCH);scene.add(rubber);
 
 const ball=new THREE.Mesh(new THREE.SphereGeometry(.0365,20,14),new THREE.MeshStandardMaterial({color:0xf7f3e9,roughness:.55}));
 scene.add(ball);
+
+const PITCH_TRACE_START_U=.30;
+const PITCH_TRACE_POINTS=72;
+const PITCH_TRACE_HOLD_MS=1800;
+const pitchTrace=new THREE.Line(
+ new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
+ new THREE.LineBasicMaterial({color:0xc6e8ff,transparent:true,opacity:.68,depthTest:true,depthWrite:false})
+);
+pitchTrace.visible=false;scene.add(pitchTrace);
+const pitchTypeColors={FAST:0xd9f1ff,CURVE:0x9fd7ff,FORK:0xffd99d};
+function pitchTypeName(type){
+ return ({FAST:'ストレート',CURVE:'カーブ',FORK:'フォーク'})[type]||type;
+}
+function buildPitchTrace(){
+ const points=[];
+ for(let i=0;i<=PITCH_TRACE_POINTS;i++){
+   const u=PITCH_TRACE_START_U+(1.03-PITCH_TRACE_START_U)*i/PITCH_TRACE_POINTS;
+   const p=pitchPointExtended(S.pitch,u);
+   points.push(new THREE.Vector3(p.x,p.y,p.z));
+ }
+ pitchTrace.geometry.dispose();
+ pitchTrace.geometry=new THREE.BufferGeometry().setFromPoints(points);
+ pitchTrace.geometry.setDrawRange(0,0);
+ pitchTrace.material.color.setHex(pitchTypeColors[S.pitch.type]||pitchTypeColors.FAST);
+ pitchTrace.visible=false;
+}
+function updatePitchTrace(now){
+ if(!S.pitch){pitchTrace.visible=false;return;}
+ const flight=FLIGHT_MS[S.pitch.type];
+ const u=(now-S.t0)/flight;
+ if(u<PITCH_TRACE_START_U||now>S.t0+flight+PITCH_TRACE_HOLD_MS){
+   pitchTrace.visible=false;return;
+ }
+ const fraction=Math.max(0,Math.min(1,(u-PITCH_TRACE_START_U)/(1.03-PITCH_TRACE_START_U)));
+ const n=Math.min(PITCH_TRACE_POINTS+1,Math.max(2,Math.floor(fraction*PITCH_TRACE_POINTS)+1));
+ pitchTrace.geometry.setDrawRange(0,n);
+ const fade=Math.max(0,now-(S.t0+flight))/PITCH_TRACE_HOLD_MS;
+ pitchTrace.material.opacity=.68*(1-fade*fade);
+ pitchTrace.visible=true;
+}
 
 const trail=[];
 for(let i=0;i<6;i++){const m=new THREE.Mesh(new THREE.SphereGeometry(.028,12,8),new THREE.MeshBasicMaterial({color:0xbfe5ff,transparent:true,opacity:.11+i*.02}));scene.add(m);trail.push(m)}
@@ -563,8 +603,9 @@ function makePitch(){
 function nextPitch(now=performance.now()){
   S.n++;S.pitch=makePitch();S.t0=now;S.nextDue=Infinity;S.locked=false;S.swing=null;S.visualSwing=null;S.batted=null;S.markerShown=false;S.phase='pitching';
   ball.visible=true;battedBall.visible=false;incomingImpactTrail.visible=false;battedTrail.visible=false;plateCrossMarker.visible=false;contactMarker.visible=false;for(const t of trail)t.visible=true;
+  buildPitchTrace();
   ui.pitchNo.textContent=S.n;
-  ui.pitchInfo.textContent=S.pitch.type+' · '+S.pitch.course+' · '+FLIGHT_MS[S.pitch.type]+'ms';
+  ui.pitchInfo.textContent='球種 '+pitchTypeName(S.pitch.type)+' · '+FLIGHT_MS[S.pitch.type]+'ms';
   resultShownAt=Infinity;
   ui.result.classList.remove('on');ui.result.textContent='';
   impactStatus.textContent='CONTACT: —';
@@ -874,7 +915,7 @@ function beginPhysicalBattedBall(ms,ballPos,near,physics){
   const detail=physics.isFoul
     ?sideLabel+'得点なし・打球速度 '+exitSpeed.toFixed(1)+'m/秒'
     :'獲得 '+pts+'点・打球速度 '+exitSpeed.toFixed(1)+'m/秒';
-  ui.result.innerHTML=resultLabel+'<small>'+detail+'<br>タイミング差 '+Math.round(physics.timingError)+'ms・打球の強さ '+Math.round(physics.power*100)+'%</small>';
+  ui.result.innerHTML=resultLabel+'<small>球種 '+pitchTypeName(S.pitch.type)+' · '+detail+'<br>タイミング差 '+Math.round(physics.timingError)+'ms・打球の強さ '+Math.round(physics.power*100)+'%</small>';
   showPitchResult();
   impactStatus.textContent='CONTACT x '+ballPos.x.toFixed(2)+' / y '+ballPos.y.toFixed(2)+' / z '+ballPos.z.toFixed(2)+' · bat '+batSpeed.toFixed(1)+'m/s · spray '+Math.round(S.batted.sprayDeg)+'° · launch '+Math.round(S.batted.launchDeg)+'°';
 }
@@ -911,7 +952,7 @@ function finishSwingMiss(){
   const batDelta=Math.round(sw.closestTime-sw.impactAt);
   const remaining=Math.max(0,Math.round((sw.closestDist-COLLISION_RADIUS)*1000));
   const reason=remaining>0?'あと約'+remaining+'mmで接触':'衝突できるタイミング・範囲から外れました';
-  ui.result.innerHTML='空振り<small>'+reason+'（最短距離 '+dist+'mm）<br>球の到達との差 '+timing+'ms・バットの姿勢との差 '+batDelta+'ms</small>';
+  ui.result.innerHTML='空振り<small>球種 '+pitchTypeName(S.pitch.type)+'<br>'+reason+'（最短距離 '+dist+'mm）<br>球の到達との差 '+timing+'ms・バットの姿勢との差 '+batDelta+'ms</small>';
   showPitchResult();
   impactStatus.textContent='NO CONTACT · closest '+dist+'mm · timing Δ '+timing+'ms · bat Δ '+batDelta+'ms';
   S.swing=null;S.phase='missed';S.locked=true;
@@ -1013,7 +1054,7 @@ function animate(now){
       ball.visible=false;for(const t of trail)t.visible=false;showPlateMarker();
 
       if(!hadSwing&&S.phase==='pitching'){
-        ui.result.innerHTML='見送り<small>ボールが通過した位置を表示しています</small>';
+        ui.result.innerHTML='見送り<small>球種 '+pitchTypeName(S.pitch.type)+'<br>ボールが通過した位置を表示しています</small>';
         showPitchResult();
       }
       if(S.phase!=='posthit')enterWaiting(now);
@@ -1046,6 +1087,7 @@ function animate(now){
   }
 
   updateCameraView(now);
+  updatePitchTrace(now);
   updateAimGuides();
   updateBat(now);
   updatePitchResultVisibility(now);
