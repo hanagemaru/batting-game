@@ -63,6 +63,65 @@ accuracy have not yet been validated on-device.
 
 ---
 
+## Current experiment — single global 3D barrel orientation (2026-11-14)
+
+**This section supersedes the earlier piecewise yaw/elevation and quintic
+angle-boundary smoothing versions.**
+
+The user still perceived an unnatural *global* trajectory, although each
+angle component was locally C2 smooth. Root cause found in code:
+- Barrel azimuth (yaw) and barrel elevation were interpolated independently.
+- The 70° upright stance had almost reached a -13° barrel tilt at launch
+  (110ms after preparation started), then yaw rapidly changed during the
+  remaining 40ms. This yields an awkward 3D barrel path despite smooth
+  scalar derivatives. Continuity of individual Euler-like curves does not
+  imply a plausible bat path.
+
+### Revised full-pose movement
+- Keep the verified compact hand/grip path and its phase timing.
+- Define **global 3D direction vectors** at the stance, trailing slot,
+  contact, and follow-through. Azimuth/elevation only select those control
+  poses; they are NOT independently interpolated over time.
+- Interpolate the unit bat direction on the unit sphere via spherical
+  De Casteljau (piecewise spherical cubic Bézier), i.e. geodesic
+  interpolation between 3D directions.
+- The complete 150ms pre-contact window has a single global 3D segment:
+  **NO bat-orientation keyframe at the 110ms load-to-launch boundary.**
+- Follow-through is a separate spherical segment with its initial
+  derivative matched in time to the pre-contact terminal derivative.
+  Bat angular velocity is nonzero through impact.
+- Retain exact existing impact grip position, barrel direction, collision
+  geometry, and responsive last-40ms input-to-contact timing.
+- Update the diagnostic with an optional overlay of five ghost bat poses
+  sampled through the full motion, so whole-swing shape can be evaluated.
+
+### Validation
+- Compared approximate full-motion top (XZ) and rear (XY) projections,
+  angular speed and barrel elevation curves to King et al. 2012 Fig 7–8.
+  The experimental dataset is a guide, NOT a direct reproduction.
+- 3 courses/heights × 3 stance angles (50/70/82°) × 3 speeds (1/2/4):
+  **27 numerical cases passed** for impact geometry, finite values,
+  phase-join continuity, grip movement.
+- Default setting: first barrel-to-contact direction change ~**117°**;
+  hand/grip excursion stays within **0.264m**; 40ms input-to-contact.
+  The whole bat direction now evolves on one 3D curve instead of
+  independently keyed pitch and yaw curves.
+- Local angular speed mismatch across the impact join was under about
+  2% of adjacent speed in all tests; no sudden orientation step at launch.
+- JavaScript syntax, exported/imported names, page DOM references,
+  unchanged ball/bat collision and hit physics verified.
+- The revised page has **not been tested in Safari on the user's device**.
+  Geometric checks do not prove visual realism; the trial must be evaluated.
+
+### Source
+- King et al., *A new technology for resolving the dynamics of a
+  swinging bat*, Sports Eng (2012), Fig 7–8:
+  https://baseball.physics.illinois.edu/SwingSensorTechnology.pdf
+- Sports biomechanics 3D motion-capture of bat and grip:
+  https://www.jstage.jst.go.jp/article/jsmeshd/2019/0/2019_B-28/_article/-char/ja
+
+---
+
 This is a **research-informed, procedural approximation**, not motion capture,
 inverse dynamics, a biomechanically validated player model, or a full skeletal simulator.
 
