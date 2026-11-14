@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08121b">
+<title>BATTER'S READ — Real Motion Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#06111a;--panel:#101f2a;--border:#3b5868;--fg:#e8f1f8;--muted:#afc1cd;--green:#8bdc9c;--blue:#75c7ff;--orange:#ffcb82}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif}
+button,input{font:inherit}
+main{height:100dvh;display:flex;flex-direction:column;max-width:900px;margin:0 auto}
+header{flex:none;display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:12px 13px 9px;border-bottom:1px solid var(--border)}
+h1{font-size:16px;line-height:1.25;margin:0}
+header small{display:block;margin-top:5px;font-size:11px;color:var(--muted)}
+a{color:#a6e4ff}
+.headerMeta{font-size:10px;color:var(--muted);text-align:right;min-width:110px}
+.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:9px 10px 6px}
+button{background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--fg);min-height:36px;padding:6px 7px;font-size:12px;font-weight:700}
+button.active{background:#194134;border-color:var(--green);color:#e0ffea}
+button:focus-visible,input:focus-visible{outline:2px solid #b4f5d0;outline-offset:2px}
+.viewport{min-height:170px;flex:1 1 auto;position:relative;overflow:hidden;margin:0 10px 6px;border-radius:9px;border:1px solid #28404f;background:#091821}
+canvas{width:100%;height:100%;display:block;touch-action:none}
+.status{position:absolute;top:10px;left:10px;max-width:calc(100% - 20px);padding:8px;border:1px solid #355364;background:#091922db;border-radius:5px;font:11px/1.5 ui-monospace,monospace;pointer-events:none}
+.legend{display:flex;gap:9px;flex-wrap:wrap;align-items:center;padding:6px 8px;position:absolute;bottom:7px;left:7px;right:7px;background:#071722da;border-radius:5px;font-size:10px;pointer-events:none}
+.legend i{display:inline-block;height:5px;width:14px;border-radius:4px;vertical-align:middle;margin-right:4px}
+.controls{flex:none;padding:10px 13px calc(11px + env(safe-area-inset-bottom));border-top:1px solid var(--border);background:#08151e;display:grid;gap:9px}
+.line{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.line strong{font:700 12px ui-monospace,monospace}
+.timeline{width:100%;accent-color:var(--green)}
+.controlsRow{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:6px}
+.options{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;font-size:11px;color:var(--muted)}
+.options label{display:flex;align-items:center;gap:4px}
+.options input{accent-color:var(--green)}
+.note{font-size:11px;color:#b8cad3;line-height:1.5}
+.note strong{color:#e5f4ff}
+.source{font-size:10px;color:#91aebd}
+.error{color:#ffbbbb;white-space:pre-wrap;font-size:12px}
+@media(max-height:720px){header{padding:7px 10px}.tabs{padding:4px 9px}.controls{gap:5px;padding-top:6px}.note{font-size:10px}.headerMeta{display:none}}
+</style>
+</head>
+<body>
+<main>
+<header>
+ <div><h1>実測スイング研究ビューア</h1><small>CMU MoCap — Subject 124 / Trial 07（Baseball Swing）</small></div>
+ <div class="headerMeta">身体の動作：実測由来<br>バットの3D軌道：未取得</div>
+</header>
+<div class="tabs" role="group" aria-label="カメラ視点">
+ <button type="button" data-view="top" aria-pressed="false">真上</button>
+ <button type="button" data-view="rear" class="active" aria-pressed="true">捕手側</button>
+ <button type="button" data-view="three" aria-pressed="false">斜め</button>
+</div>
+<div class="viewport" id="viewport">
+ <canvas id="canvas"></canvas>
+ <div id="status" class="status">CMUデータを読み込み中…</div>
+ <div class="legend">
+  <span><i style="background:#75c7ff"></i>左手</span>
+  <span><i style="background:#ffcb82"></i>右手</span>
+  <span><i style="background:#9de3a3"></i>両手の中点（計算値）</span>
+  <span><i style="background:#d5e4f1"></i>身体</span>
+ </div>
+</div>
+<section class="controls">
+ <div class="line"><strong id="frameLabel">-- / --</strong><strong id="eventLabel">--</strong></div>
+ <input id="timeline" class="timeline" type="range" min="0" max="140" step="1" value="0" aria-label="モーションのフレーム">
+ <div class="controlsRow">
+  <button id="prev" type="button">前へ1フレーム</button>
+  <button id="play" type="button" class="active">一時停止</button>
+  <button id="next" type="button">次へ1フレーム</button>
+ </div>
+ <div class="options">
+   <label><input id="trace" type="checkbox" checked>両手の軌跡</label>
+   <label><input id="markers" type="checkbox" checked>関節の点</label>
+   <label>再生速度 <input id="speed" type="range" min="0.15" max="1.0" step="0.05" value="0.35" aria-label="再生速度"><span id="speedLabel">0.35倍</span></label>
+ </div>
+ <div class="note"><strong>確認済み：</strong>実測骨格から再構成した両手・肘・肩・体幹の軌道です。<strong>未計測：</strong>バットのグリップ、先端、芯と実際のボール接触時刻。画面内の「推定接触」は第三者の目視目安です。</div>
+ <div class="source"><a href="https://mocap.cs.cmu.edu/" target="_blank" rel="noopener">CMU Graphics Lab MoCap</a>／<a href="https://github.com/una-dinosauria/cmu-mocap/blob/master/data/124/124_07.bvh" target="_blank" rel="noopener">取得元BVH</a>｜表示スケールは身長仮定による正規化</div>
+</section>
+</main>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+const $=id=>document.getElementById(id);
+const viewport=$('viewport'),canvas=$('canvas'),timeline=$('timeline'),status=$('status');
+let data=null,playing=true,rate=.35,frame=0,last=0,view='rear',activeCamera;
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x081923);
+const ambient=new THREE.HemisphereLight(0xcdeaff,0x4e6973,2.3);scene.add(ambient);
+const sun=new THREE.DirectionalLight(0xffffff,1.6);sun.position.set(3,5,-4);scene.add(sun);
+const grid=new THREE.GridHelper(4,16,0x516f81,0x25404e);grid.position.y=0;scene.add(grid);
+const orientLine=new THREE.ArrowHelper(new THREE.Vector3(0,0,1),new THREE.Vector3(-.85,.02,-.55),1.2,0xeac38e,.13,.06);
+scene.add(orientLine);
+const bodyMat=new THREE.LineBasicMaterial({color:0xe0e9f2,transparent:true,opacity:.85});
+const bones=new THREE.LineSegments(new THREE.BufferGeometry(),bodyMat);
+scene.add(bones);
+const colors={handL:0x75c7ff,handR:0xffcb82,mid:0x9de3a3};
+const dots=[],trailLines={};
+const ballMarker=new THREE.Mesh(new THREE.SphereGeometry(.018,10,8),
+  new THREE.MeshBasicMaterial({color:0x9de3a3}));ballMarker.visible=false;scene.add(ballMarker);
+const cameras={
+ ortho:new THREE.OrthographicCamera(-1,1,1,-1,.02,25),
+ perspective:new THREE.PerspectiveCamera(52,1,.03,25)
+};
+function positionOf(src,index,name){
+ const offset=src.jointNames.indexOf(name)*3;
+ return new THREE.Vector3(...src.frames[index].slice(offset,offset+3));
+}
+function framePoint(a,b,alpha,name){
+ const p=positionOf(data,a,name);
+ if(a!==b)p.lerp(positionOf(data,b,name),alpha);
+ return p;
+}
+function pointAt(time,name){
+ const a=Math.max(0,Math.min(data.frames.length-1,Math.floor(time)));
+ const b=Math.min(a+1,data.frames.length-1),alpha=Math.max(0,Math.min(1,time-a));
+ return framePoint(a,b,alpha,name);
+}
+const grabNames=['pelvis','neck','head','shoulderL','shoulderR','elbowL','elbowR','handL','handR','hipL','hipR','kneeL','kneeR','footL','footR'];
+function midpoint(time){
+ return pointAt(time,'handL').add(pointAt(time,'handR')).multiplyScalar(.5);
+}
+function makeScene(){
+ const verts=new Float32Array(data.skeletonEdges.length*2*3);
+ bones.geometry.setAttribute('position',new THREE.BufferAttribute(verts,3));
+ for(const name of grabNames){
+  const key=name.startsWith('hand')?name:null;
+  const geom=new THREE.SphereGeometry(key?.035:.021,12,8);
+  const mat=new THREE.MeshBasicMaterial({color:key?colors[key]:0xcce2ef});
+  const dot=new THREE.Mesh(geom,mat);scene.add(dot);dots.push({name,dot});
+ }
+ for(const [key,fromColor] of [['handL',colors.handL],['handR',colors.handR],['mid',colors.mid]]){
+  const pts=Array.from({length:data.frames.length},(_,i)=>key==='mid'?midpoint(i):positionOf(data,i,key));
+  const geom=new THREE.BufferGeometry().setFromPoints(pts);
+  const trail=new THREE.Line(geom,new THREE.LineBasicMaterial({color:fromColor,transparent:true,opacity:.8,depthTest:true}));
+  scene.add(trail);trailLines[key]=trail;
+ }
+}
+function updatePose(){
+ if(!data)return;
+ const pts=grabNames.map(n=>pointAt(frame,n));
+ const attr=bones.geometry.getAttribute('position');
+ data.skeletonEdges.forEach(([a,b],j)=>{
+  attr.setXYZ(j*2,...pts[a].toArray());
+  attr.setXYZ(j*2+1,...pts[b].toArray());
+ });
+ attr.needsUpdate=true;
+ for(const {name,dot} of dots){
+  dot.visible=$('markers').checked;
+  dot.position.copy(pts[grabNames.indexOf(name)]);
+ }
+ ballMarker.position.copy(midpoint(frame));
+ ballMarker.visible=$('markers').checked;
+ for(const line of Object.values(trailLines)){
+  line.visible=$('trace').checked;
+  line.geometry.setDrawRange(0,Math.max(2,Math.min(data.frames.length,Math.ceil(frame)+1)));
+ }
+ const f=Math.round(frame),original=data.clipStartFrame+f,sec=f/data.fps;
+ $('frameLabel').textContent='CMU frame '+original+' / '+(data.clipEndFrame)+' · '+sec.toFixed(2)+' 秒';
+ const ev=data.approximateEvents;
+ $('eventLabel').textContent=original<ev.loadFrame?'構え':original<ev.launchFrame?'踏み込み':original<ev.contactFrame?'スイング中':original===ev.contactFrame?'推定接触': '振り抜き';
+ const lm=pts[grabNames.indexOf('handL')],rm=pts[grabNames.indexOf('handR')];
+ status.innerHTML='<strong>CMU 124_07｜'+$('eventLabel').textContent+'</strong><div>左手・右手間の距離：'+Math.round(lm.distanceTo(rm)*100)+'cm</div><div>バット姿勢：未計測</div><div>投手方向（推定）：+Z</div>';
+ timeline.value=String(Math.round(frame));
+}
+function setFrame(f){
+ frame=Math.max(0,Math.min(data.frames.length-1,f));updatePose();
+}
+function setPlaying(on){
+ playing=on;$('play').textContent=on?'一時停止':'再生';$('play').classList.toggle('active',on);
+}
+function setView(v){
+ view=v;
+ document.querySelectorAll('[data-view]').forEach(b=>{
+  const on=b.dataset.view===v;b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));
+ });
+ resize();
+}
+function resize(){
+ const w=viewport.clientWidth,h=viewport.clientHeight;
+ if(w<1||h<1)return;
+ renderer.setSize(w,h,false);
+ const a=w/h;
+ const ortho=cameras.ortho;
+ const width=2.6,halfW=width/2,halfH=halfW/a;
+ ortho.left=-halfW;ortho.right=halfW;ortho.top=halfH;ortho.bottom=-halfH;ortho.updateProjectionMatrix();
+ if(view==='top'){
+  ortho.up.set(0,0,1);ortho.position.set(0,6,.35);ortho.lookAt(0,.85,.35);activeCamera=ortho;
+ }else if(view==='rear'){
+  ortho.up.set(0,1,0);ortho.position.set(0,.95,-6);ortho.lookAt(0,.95,.2);activeCamera=ortho;
+ }else{
+  const cam=cameras.perspective;cam.aspect=a;cam.updateProjectionMatrix();cam.up.set(0,1,0);
+  cam.position.set(2.5,2.2,-3.3);cam.lookAt(0,1,.2);activeCamera=cam;
+ }
+}
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+timeline.addEventListener('input',()=>{setPlaying(false);setFrame(+timeline.value)});
+$('prev').addEventListener('click',()=>{setPlaying(false);setFrame(Math.round(frame)-1)});
+$('next').addEventListener('click',()=>{setPlaying(false);setFrame(Math.round(frame)+1)});
+$('play').addEventListener('click',()=>setPlaying(!playing));
+for(const id of ['trace','markers'])$(id).addEventListener('change',updatePose);
+$('speed').addEventListener('input',()=>{
+ rate=+$('speed').value;$('speedLabel').textContent=rate.toFixed(2)+'倍';
+});
+new ResizeObserver(resize).observe(viewport);
+function animate(now){
+ requestAnimationFrame(animate);
+ if(data&&playing&&last){
+  const dt=Math.min(.07,(now-last)/1000);
+  let next=frame+dt*data.fps*rate;
+  if(next>data.frames.length-1)next=0;
+  setFrame(next);
+ }
+ last=now;
+ if(activeCamera)renderer.render(scene,activeCamera);
+}
+requestAnimationFrame(animate);
+fetch('./cmu124_07_swing.json',{cache:'no-store'})
+ .then(r=>{if(!r.ok)throw Error('実測データの読み込みエラー '+r.status);return r.json()})
+ .then(d=>{
+  if(d.frames.length!==141||d.jointNames.length!==15||d.frames.some(f=>f.length!==45))
+   throw Error('実測データの形式を確認できません');
+  data=d;timeline.max=String(d.frames.length-1);
+  makeScene();setFrame(0);setView('rear');
+ })
+ .catch(err=>{status.classList.add('error');status.textContent=String(err.message||err)});
+</script>
+</body>
+</html>
