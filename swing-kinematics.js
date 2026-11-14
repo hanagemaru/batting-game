@@ -26,7 +26,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const radians=THREE.MathUtils.degToRad;
 const V3=THREE.Vector3;
 const ZERO_YAW_OFFSET=Math.tanh(1.25*.35);
-const ZERO_BARREL_OFFSET=Math.tanh(1.2*.22);
+const ZERO_BARREL_OFFSET=Math.tanh(1.8*.22);
 
 export function idealImpactZ(x){
   return PLATE_FRONT+IMPACT_SLOPE*x;
@@ -76,7 +76,7 @@ export function swingPoseAt(ms,sw){
   // curves are continuous in angle AND angular velocity through contact.
   // The offsets pin both curves to zero at the intended contact time.
   const handYaw=radians(42*(Math.tanh(1.25*(u+.35))-ZERO_YAW_OFFSET));
-  const batYaw=radians(105*(Math.tanh(1.2*(u-.22))+ZERO_BARREL_OFFSET));
+  const batYaw=radians(125*(Math.tanh(1.8*(u-.22))+ZERO_BARREL_OFFSET));
   const hand=sw.bundle.pivot.clone().add(rotateY(sw.bundle.radius,handYaw));
   // The barrel is cocked high in the loading posture and drops as the torso
   // and hands begin moving. The launch elevation is a stance preference,
