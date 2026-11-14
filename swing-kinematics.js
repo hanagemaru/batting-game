@@ -18,7 +18,8 @@ export const BAT_LENGTH=.864;
 export const GRIP_TO_CONTACT=.72;
 export const SWEET_START=.56;
 export const SWEET_END=.82;
-export const BASE_TO_CONTACT_MS=80; // 40 ms to impact at the default 2x game speed.
+export const BASE_TO_CONTACT_MS=80; // 40ms release-to-contact at 2x; gameplay control latency.
+export const BASE_PREP_MS=220; // 110ms prelaunch loading at 2x; complete downswing = 150ms.
 export const DEFAULT_STANCE_ELEVATION_DEG=70; // Adjustable; no universal batting stance exists.
 export const BASE_FOLLOW_THROUGH_MS=220;
 
@@ -50,76 +51,70 @@ export function impactBatPose(x,y){
   const hand=contact.clone().addScaledVector(dir,-GRIP_TO_CONTACT);
   return{hand,dir,contact};
 }
-const SWEET_MID=(SWEET_START+SWEET_END)/2;
+// The grip remains close to the hitter and the barrel rotates about it.
+// The earlier model incorrectly drove the sweet spot across the field and
+// derived the grip from it (over 2 m of grip displacement). This restores
+// a compact hand arc, independently evolving bat azimuth and elevation.
+// The game starts the final quick phase on release; the full 3-phase motion
+// from upright stance can be inspected in the three-camera lab.
 
-// Smooth cubic path for the sweet spot. Its control points preserve both a
-// nearly straight approach into contact and an ascending finish after contact.
-function cubic(p0,p1,p2,p3,t){
-  const u=1-t;
-  return p0.clone().multiplyScalar(u*u*u)
-    .addScaledVector(p1,3*u*u*t)
-    .addScaledVector(p2,3*u*t*t)
-    .addScaledVector(p3,t*t*t);
+// Cubic Hermite interpolation with endpoint velocities in units per ms.
+// This guarantees continuity at the preparation -> launch -> follow joins.
+function hermite(a,b,va,vb,elapsed,duration){
+  const q=clamp(elapsed/Math.max(.001,duration),0,1);
+  const q2=q*q,q3=q2*q,dt=duration;
+  return (2*q3-3*q2+1)*a+(q3-2*q2+q)*va*dt
+       +(-2*q3+3*q2)*b+(q3-q2)*vb*dt;
 }
-function smoothstep(t){return t*t*(3-2*t);}
 export function swingPoseBundle(x,y,stanceElevationDeg=DEFAULT_STANCE_ELEVATION_DEG){
   const impact=impactBatPose(x,y);
-  const core=impact.hand.clone().addScaledVector(impact.dir,SWEET_MID);
-  // Right-handed player: launch from the hands/inside and slightly behind,
-  // then approach across the plate. +Z is toward the pitcher.
-  const approachStart=core.clone().add(new V3(.78,.43,-.34));
-  const approachC1=approachStart.clone(); // starts from rest
-  // Nearly tangent to the intended swing plane as the core reaches the ball:
-  // lateral travel toward the far side plus a small upward component.
-  const approachC2=core.clone().add(new V3(.31,-.055,-.105));
-  const finish=core.clone().add(new V3(-1.06,.64,.49));
-  return{
-    impact,core,approachStart,approachC1,approachC2,finish,
-    stanceElevationDeg:clamp(Number(stanceElevationDeg)||DEFAULT_STANCE_ELEVATION_DEG,45,85)
-  };
+  // A short curved grip path with the body/arms pivot close to the hitter.
+  const handPivot=impact.hand.clone().add(new V3(.32,0,.15));
+  const handRadius=impact.hand.clone().sub(handPivot);
+  return{impact,handPivot,handRadius,
+    stanceElevationDeg:clamp(Number(stanceElevationDeg)||DEFAULT_STANCE_ELEVATION_DEG,45,85)};
 }
 export function swingPoseAt(ms,sw){
-  const t=clamp(ms,sw.motionStart,sw.impactAt+sw.followMs);
-  const pre=t<=sw.impactAt;
-  const durationIn=Math.max(1,sw.toImpactMs),durationOut=Math.max(1,sw.followMs);
-  const q=pre?clamp((t-sw.motionStart)/durationIn,0,1):
-    clamp((t-sw.impactAt)/durationOut,0,1);
-  const b=sw.bundle;
-
-  let core,yawDeg,elevation;
-  const impactElevation=Math.asin(clamp(b.impact.dir.y,-1,1));
-  if(pre){
-    // Cubic controls make approach near-linear in XZ and smoothly turn upward
-    // near the actual impact, rather than traversing a symmetric disc arc.
-    core=cubic(b.approachStart,b.approachC1,b.approachC2,b.core,q);
-    // Hermite yaw from -60deg to 0deg: zero start velocity, positive contact
-    // velocity. Contact yaw velocity will match the follow-through branch.
-    const h00=2*q*q*q-3*q*q+1,h11=q*q*q-q*q;
-    yawDeg=-60*h00+75*h11;
-    elevation=radians(b.stanceElevationDeg)
-      +(impactElevation-radians(b.stanceElevationDeg))*smoothstep(q);
+  const t=clamp(ms,sw.motionStart,sw.finishAt??(sw.impactAt+sw.followMs));
+  const prepMs=sw.prepMs??(BASE_PREP_MS/2);
+  const launchStart=sw.launchStart??(sw.impactAt-sw.toImpactMs);
+  const impactElevation=THREE.MathUtils.radToDeg(Math.asin(clamp(sw.bundle.impact.dir.y,-1,1)));
+  let gripPhase,yawDeg,elevationDeg,gripLift;
+  if(t<=launchStart){
+    // Preparation: stand the bat upright, then smoothly slot it down.
+    const elapsed=t-sw.motionStart;
+    gripPhase=hermite(-.75,-.48,0,.002,elapsed,prepMs);
+    yawDeg=hermite(100,65,0,-.18,elapsed,prepMs);
+    elevationDeg=hermite(sw.bundle.stanceElevationDeg,-10,0,-.25,elapsed,prepMs);
+    gripLift=hermite(.05,.015,0,-.0004,elapsed,prepMs);
+  }else if(t<=sw.impactAt){
+    // The last 40ms at default game speed: wrists release the barrel rapidly.
+    const elapsed=t-launchStart,dur=sw.toImpactMs;
+    // Scale rates with game speed so changing speed doesn't reshape the arc.
+    const rate=40/Math.max(1,dur);
+    gripPhase=hermite(-.48,0,.002*rate,.009*rate,elapsed,dur);
+    yawDeg=hermite(65,0,-.18*rate,-2.4*rate,elapsed,dur);
+    elevationDeg=hermite(-10,impactElevation,-.25*rate,.22*rate,elapsed,dur);
+    gripLift=hermite(.015,0,-.0004*rate,0,elapsed,dur);
   }else{
-    // Match cubic first derivatives at the impact point in world time:
-    // (C-P2)/toImpactMs == (P1-C)/followMs.
-    const continuation=b.core.clone().addScaledVector(
-      b.core.clone().sub(b.approachC2),durationOut/durationIn);
-    core=cubic(b.core,continuation,b.finish,b.finish,q);
-    const h10=q*q*q-2*q*q+q,h01=-2*q*q*q+3*q*q;
-    yawDeg=75*durationOut/durationIn*h10+115*h01;
-    // Post-contact barrel elevation rises with the upward finish.
-    elevation=impactElevation
-      +(radians(24)-impactElevation)*smoothstep(q);
+    const elapsed=t-sw.impactAt,dur=sw.followMs;
+    const rate=110/Math.max(1,dur);
+    gripPhase=hermite(0,.65,.009*rate,0,elapsed,dur);
+    yawDeg=hermite(0,-135,-2.4*rate,0,elapsed,dur);
+    elevationDeg=hermite(impactElevation,10,.22*rate,0,elapsed,dur);
+    gripLift=hermite(0,.04,0,0,elapsed,dur);
   }
+  const grip=sw.bundle.handPivot.clone()
+    .add(rotateY(sw.bundle.handRadius,gripPhase));
+  grip.y+=gripLift;
+  const impactDir=sw.bundle.impact.dir;
   const horizontal=rotateY(
-    new V3(b.impact.dir.x,0,b.impact.dir.z).normalize(),radians(yawDeg));
+    new V3(impactDir.x,0,impactDir.z).normalize(),radians(yawDeg));
+  const e=radians(elevationDeg);
   const dir=new V3(
-    horizontal.x*Math.cos(elevation),Math.sin(elevation),
-    horizontal.z*Math.cos(elevation)
+    horizontal.x*Math.cos(e),Math.sin(e),horizontal.z*Math.cos(e)
   ).normalize();
-  // Derive hands from the actual sweet-spot trajectory so the visible bat,
-  // its core, and the collision segment cannot diverge.
-  const hand=core.clone().addScaledVector(dir,-SWEET_MID);
-  return{hand,dir,core};
+  return{hand:grip,dir,gripPhase,yawDeg,elevationDeg};
 }
 
 export function sweetSegment(pose){
@@ -135,9 +130,13 @@ export function pointOnSweet(pose,t){
 export function swingTiming(speed=2,impactAt=0){
   const safeSpeed=clamp(Number(speed)||2,1,4);
   const toImpactMs=BASE_TO_CONTACT_MS/safeSpeed;
+  const prepMs=BASE_PREP_MS/safeSpeed;
   const followMs=BASE_FOLLOW_THROUGH_MS/safeSpeed;
-  return{motionStart:impactAt-toImpactMs,impactAt,toImpactMs,followMs,
-    finishAt:impactAt+followMs};
+  const launchStart=impactAt-toImpactMs;
+  return{
+    motionStart:launchStart-prepMs,launchStart,prepMs,
+    impactAt,toImpactMs,followMs,finishAt:impactAt+followMs
+  };
 }
 export function swingAtAim(x,y,speed=2,impactAt=0,stanceElevationDeg=DEFAULT_STANCE_ELEVATION_DEG){
   return{bundle:swingPoseBundle(x,y,stanceElevationDeg),...swingTiming(speed,impactAt)};
