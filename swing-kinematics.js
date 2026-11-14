@@ -83,10 +83,11 @@ export function swingPoseAt(ms,sw){
   if(t<=launchStart){
     // Preparation: stand the bat upright, then smoothly slot it down.
     const elapsed=t-sw.motionStart;
-    gripPhase=hermite(-.75,-.48,0,.002,elapsed,prepMs);
-    yawDeg=hermite(100,65,0,-.18,elapsed,prepMs);
-    elevationDeg=hermite(sw.bundle.stanceElevationDeg,-10,0,-.25,elapsed,prepMs);
-    gripLift=hermite(.05,.015,0,-.0004,elapsed,prepMs);
+    const rate=110/Math.max(1,prepMs);
+    gripPhase=hermite(-.75,-.48,0,.002*rate,elapsed,prepMs);
+    yawDeg=hermite(100,65,0,-.18*rate,elapsed,prepMs);
+    elevationDeg=hermite(sw.bundle.stanceElevationDeg,-10,0,-.25*rate,elapsed,prepMs);
+    gripLift=hermite(.05,.015,0,-.0004*rate,elapsed,prepMs);
   }else if(t<=sw.impactAt){
     // The last 40ms at default game speed: wrists release the barrel rapidly.
     const elapsed=t-launchStart,dur=sw.toImpactMs;
