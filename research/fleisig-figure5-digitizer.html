@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fleisig Figure 5 | 2方向バット軌道の数値化</title>
+<style>
+:root{color-scheme:dark;--bg:#09131d;--p:#152735;--edge:#405869;--text:#edf4fa;--muted:#b3c4d0;--blue:#63caff;--orange:#ffbd72;--green:#9ae4ad}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:14px/1.48 system-ui,sans-serif;margin:0}
+main{max-width:1200px;margin:auto;padding:12px}
+h1{font-size:20px;margin:0 0 5px}h2{font-size:16px;margin:0 0 7px}
+p{margin:6px 0}small,.muted{color:var(--muted)}a{color:#9bdcf7}
+header{margin:0 0 12px}.note{font-size:12px;color:var(--muted)}
+.columns{display:grid;grid-template-columns:minmax(0,620px) minmax(285px,1fr);gap:12px;align-items:start}
+.panel{background:#10202d;border:1px solid var(--edge);border-radius:10px;padding:12px;margin-bottom:10px}
+.figureScroller{overflow:auto;max-height:min(74vh,790px);background:#070f16;border:1px solid #456071;border-radius:7px}
+#stage{width:591px;aspect-ratio:591/1000;position:relative;touch-action:pan-x pan-y;line-height:0}
+#figure{display:block;width:100%;height:100%;object-fit:contain}
+#overlay{position:absolute;inset:0;width:100%;height:100%;overflow:visible;cursor:crosshair;touch-action:manipulation}
+#overlay circle{stroke:#03090e;stroke-width:2}
+button,select,input{font:inherit}button,select,input[type=number]{border:1px solid #5f7786;color:var(--text);background:#233746;border-radius:6px;min-height:36px;padding:6px 8px}
+button{cursor:pointer}button.active{border-color:var(--green);background:#22523c}
+button:hover{background:#34526a}button:disabled{opacity:.5;cursor:default}
+button.action{background:#335e4b;border-color:#72b48a}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:7px 0}
+.row label{font-size:12px;display:flex;gap:6px;align-items:center}
+label{color:#d7e8f0}
+input[type=range]{accent-color:#a6e7bb;min-width:100px}
+input[type=checkbox]{accent-color:#9de3ad}
+.selection{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.selection>label{display:grid;gap:4px;font-size:12px}
+.selection select,.selection input{width:100%}
+#status{padding:8px;background:#0c1b27;border-radius:6px;min-height:54px;font-size:12px;color:#cbdce7;white-space:pre-line;word-break:break-word}
+table{border-collapse:collapse;width:100%;font-size:11px}
+td,th{border-bottom:1px solid #344b5a;padding:6px 4px;text-align:left}th{font-size:10px;color:#c7dae4}
+tr.selected{background:#183f43}
+tr[role=button]{cursor:pointer}
+.good{color:#b8f7c4}.warn{color:#ffce86}.bad{color:#ff9e9e}
+.sampleView{border:1px solid #395265;border-radius:7px;padding:5px;background:#091923}
+.sampleView svg{width:100%;height:195px;display:block}
+.pre{font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px}
+#loadFallback{display:none;background:#321e28;border:1px solid #9f6471;padding:9px;border-radius:6px}
+#loadFallback input{font-size:12px}
+.footerNote{font-size:11px;color:#b5cbd7}
+@media(max-width:760px){
+ .columns{grid-template-columns:1fr}
+ .panel{padding:9px}
+ .figureScroller{max-height:52vh}
+ h1{font-size:18px}
+}
+</style>
+</head>
+<body><main>
+<header>
+  <h1>Fleisig Figure 5 ─ 2方向の軌道数値化</h1>
+  <p class="note">Fleisig, Zheng, Stodden &amp; Andrews (2002) / <a href="https://doi.org/10.1046/j.1460-2687.2002.00096.x" target="_blank" rel="noopener">原論文</a> / <a href="https://www.academia.edu/figures/48188523/figure-5-digitized-motion-of-lefthanded-baseball-bat-swing" target="_blank" rel="noopener">Figure 5 原図</a></p>
+  <p class="note">上：(a)真上の X–Y、下：(b)横の X–Z。元研究は200Hz＝5ms間隔ですが、各線に時刻番号はありません。<strong>同じ番号で2図を登録するだけでは同一時刻と証明できません。</strong></p>
+</header>
+<div class="columns">
+<div>
+ <div class="panel">
+  <div class="row" style="justify-content:space-between"><h2>原図とクリック位置</h2><label>拡大 <input type="range" id="zoom" min="0.55" max="2.5" step="0.05" value="1"><output id="zoomOut">1.00×</output></label></div>
+  <div id="loadFallback" role="alert">原図画像の自動表示に失敗しました。<a href="https://www.academia.edu/figures/48188523/figure-5-digitized-motion-of-lefthanded-baseball-bat-swing" target="_blank" rel="noopener">元ページからFigure 5を保存</a>して、下で選択してください。<input type="file" id="localImage" accept="image/*"></div>
+  <div class="figureScroller" id="scroll">
+   <div id="stage">
+    <img id="figure" src="https://figures.academia-assets.com/53176736/figure_005.jpg" alt="Fleisig et al. Figure 5, overhead and side projection">
+    <svg id="overlay" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 591 1000" preserveAspectRatio="none" aria-label="Figure 5 の座標登録"><g id="guides"></g><g id="marks"></g></svg>
+   </div>
+  </div>
+  <div class="row"><label><input type="checkbox" id="showAxes" checked>座標軸の校正線</label><label><input type="checkbox" id="showCandidate" checked>試読候補（未検証）</label></div>
+  <p class="note">原図画像自体はGitHubに再配布していません。色線のみこのページの描画です。校正線の起点は原図から読み取った概算ピクセル座標で、必要に応じて修正します。</p>
+ </div>
+ <div class="panel"><h2>復元できた線の3Dプレビュー</h2>
+  <div class="sampleView"><svg id="preview" viewBox="0 0 500 195" aria-label="上下視点を組み合わせたバット軌道"></svg></div>
+  <div class="row"><label>3Dの表示角 <input type="range" id="viewAngle" min="-140" max="140" step="5" value="40"><output id="viewAngleLabel">40°</output></label></div>
+  <p class="note">2方向の同時刻対応を確認した線のみ緑で表示します。未照合データから連続3Dモーションを生成しません。</p>
+ </div>
+</div>
+<div>
+ <section class="panel">
+  <h2>図の線を記録する</h2>
+  <div class="selection">
+    <label>線の通し番号（時刻ではない）<input id="sampleIndex" type="number" min="1" max="120" value="1" step="1"></label>
+    <label>線の種類 <select id="type"><option value="marker">短い計測線（約56cm）</option><option value="full">太い全長バット線（約85cm）</option></select></label>
+    <label>画像 <select id="panelSelect"><option value="top">上：真上図（X,Y）</option><option value="side">下：横図（X,Z）</option></select></label>
+    <label>指定する点 <select id="endSelect"><option value="grip">グリップ側マーカー</option><option value="tip">バレル側マーカー</option></select></label>
+  </div>
+  <p class="note">選択した線の両端を画像上でタップします。上面2点・側面2点を入力すると座標が得られます。次の点へ自動で進みますが、番号と対応関係は必ず確認してください。</p>
+  <div class="row"><label><input type="checkbox" id="matched">同一時刻の線だと確認済み</label></div>
+  <div class="row">
+   <button id="undo">1つ戻す</button>
+   <button id="erase">現在番号を消去</button>
+   <button id="clear" title="現在までに入力した全ての線を消す">全消去</button>
+  </div>
+  <div id="status">データを読み込み中</div>
+  <div class="row">
+   <button class="action" id="saveJson">JSON出力</button>
+   <button id="saveCsv">CSV出力（確認済みのみ）</button>
+  </div>
+  <p class="note">記録した点はこのブラウザ内に保存します。未確認の対応点はCSVに含めません。データを商用ゲームへ流用する前に図の権利と測定誤差の確認が必要です。</p>
+ </section>
+ <section class="panel">
+  <h2>対応点と品質チェック</h2>
+  <table><thead><tr><th>番号</th><th>上面</th><th>側面</th><th>Xずれ</th><th>3D長さ</th><th>状態</th></tr></thead><tbody id="sampleRows"></tbody></table>
+  <p class="note">左右のX座標は同じ実験室座標です。2方向でXが一致するかを照合します。計測マーカー間距離は本文で約56cmと記載されています。開始・衝突時の太い全長線にはこの制約を適用しません。</p>
+ </section>
+ <section class="panel">
+  <h2>軸校正値（画像のピクセル）</h2>
+  <table><tbody>
+    <tr><td>上面 X 0→3m</td><td class="pre">72→581px</td></tr>
+    <tr><td>上面 Y −1→2m</td><td class="pre">437→36px</td></tr>
+    <tr><td>側面 X 0→3m</td><td class="pre">72→581px</td></tr>
+    <tr><td>側面 Z 0→1.4m</td><td class="pre">954→551px</td></tr>
+  </tbody></table>
+  <p class="note">凡例：<span class="good">緑＝照合済み</span>、<span class="warn">橙＝未確認の点</span>。太い灰色の試読候補は<strong>バットの始点・終点を確定した値ではありません</strong>。</p>
+ </section>
+</div>
+</div>
+</main>
+<script>
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id),svgNS='http://www.w3.org/2000/svg';
+const STORE='batting-fleisig-figure5-annotations-v1';
+let meta=null, samples={},selected=1,history=[];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const el=(name,attrs={})=>{const n=document.createElementNS(svgNS,name);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,v);return n;};
+function ix(){return Math.max(1,Math.min(120,Number($('sampleIndex').value)||1));}
+function fmt(n,d=2){return Number.isFinite(n)?Number(n).toFixed(d):'—';}
+function record(){return samples[selected]||(samples[selected]={type:$('type').value,top:{},side:{},matched:false});}
+function clone(o){return JSON.parse(JSON.stringify(o));}
+function save(){try{localStorage.setItem(STORE,JSON.stringify(samples))}catch(e){/* storage may be disabled */}}
+function updateSelect(){
+ selected=ix();
+ const r=samples[selected]||{type:'marker',matched:false};
+ $('type').value=r.type||'marker';$('matched').checked=!!r.matched;
+ drawAll();
+}
+function imageToWorld(view,xy){
+ const c=view==='top'?meta.calibration.top:meta.calibration.side;
+ const x=3*(xy[0]-c.xPx0)/(c.xPx3-c.xPx0);
+ if(view==='top')return{x,y:-1+3*(c.yPxMinus1-xy[1])/(c.yPxMinus1-c.yPx2)};
+ return{x,z:1.4*(c.zPx0-xy[1])/(c.zPx0-c.zPx1_4)};
+}
+function solve(r){
+ if(!r||!r.top||!r.side)return null;
+ const keys=['grip','tip'];
+ const pts={};let dx=0;
+ for(const key of keys){
+  if(!r.top[key]||!r.side[key])return null;
+  const a=imageToWorld('top',r.top[key]),b=imageToWorld('side',r.side[key]);
+  pts[key]=[(a.x+b.x)/2,a.y,b.z];
+  dx=Math.max(dx,Math.abs(a.x-b.x));
+ }
+ const length=Math.hypot(...pts.grip.map((v,j)=>pts.tip[j]-v));
+ const typical=r.type==='full'?.85:.56;
+ const deviation=Math.abs(length-typical);
+ const acceptable=dx<=.06&&deviation<=(r.type==='full'?.16:.10);
+ return{pts,dx,length,deviation,acceptable,confirmed:!!r.matched&&acceptable};
+}
+function axisGuides(){
+ const g=$('guides');g.replaceChildren();
+ if(!$('showAxes').checked||!meta)return;
+ for(const [view,minY,maxY]of [['top',32,438],['side',553,955]]){
+  for(let k=0;k<=3;k++){
+   const x=72+(581-72)*k/3;
+   g.append(el('line',{x1:x,y1:minY,x2:x,y2:maxY,stroke:'#58aad4','stroke-width':.7,'stroke-dasharray':'4 6',opacity:.44}));
+  }
+  if(view==='top')for(let k=-1;k<=2;k++){
+   const y=437-(k+1)*(437-36)/3;
+   g.append(el('line',{x1:72,y1:y,x2:581,y2:y,stroke:'#58aad4','stroke-width':.7,'stroke-dasharray':'3 6',opacity:.34}));
+  }
+  if(view==='side')for(let k=0;k<=7;k++){
+   const y=954-k*(954-551)/7;
+   g.append(el('line',{x1:72,y1:y,x2:581,y2:y,stroke:'#58aad4','stroke-width':.7,'stroke-dasharray':'3 6',opacity:.34}));
+  }
+ }
+}
+function drawMarks(){
+ const g=$('marks');g.replaceChildren();if(!meta)return;
+ const add=(view,point,color,id,label,dashed)=>{
+  if(!point)return;
+  const p=point,base={fill:color,stroke:'#06131d','stroke-width':1.7};
+  g.append(el('circle',{cx:p[0],cy:p[1],r:4.2,...base}));
+  const t=el('text',{x:p[0]+7,y:p[1]-5,fill:color,'font-size':10,'font-weight':'bold'});t.textContent=label||id;g.append(t);
+ };
+ function addSample(index,r,opacity){
+  for(const view of ['top','side']){
+   const a=r[view]?.grip,b=r[view]?.tip;
+   if(a&&b){
+    g.append(el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:r.matched?'#9ae4ad':'#ffbd72','stroke-width':index===selected?3:1.5,opacity}));
+   }
+   if(index===selected){add(view,a,'#63caff',index,'H'+index);add(view,b,'#ffbd72',index,'T'+index)}
+  }
+ }
+ for(const [id,record] of Object.entries(samples))if(+id!==selected)addSample(+id,record,.4);
+ if(samples[selected])addSample(selected,samples[selected],1);
+ if($('showCandidate').checked&&meta.initialAnnotation){
+   const c=meta.initialAnnotation;
+   for(const view of ['top','side']){
+    const a=c[view].gripPx,b=c[view].barrelPx;
+    g.append(el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:'#d4d9e0','stroke-width':2.5,'stroke-dasharray':'5 4',opacity:.7}));
+    g.append(el('circle',{cx:a[0],cy:a[1],r:5,fill:'none',stroke:'#ced6dc','stroke-dasharray':'3 3','stroke-width':1.6}));
+    g.append(el('circle',{cx:b[0],cy:b[1],r:5,fill:'none',stroke:'#ced6dc','stroke-dasharray':'3 3','stroke-width':1.6}));
+   }
+ }
+}
+function preview(){
+ const svg=$('preview');svg.replaceChildren();if(!meta)return;
+ const confirmed=Object.entries(samples).map(([k,r])=>({k:+k,sol:solve(r)})).filter(o=>o.sol&&o.sol.confirmed);
+ const angle=+$('viewAngle').value*Math.PI/180;
+ const project=p=>{
+   const x=p[0]*Math.cos(angle)+p[1]*Math.sin(angle);
+   const depth=-p[0]*Math.sin(angle)+p[1]*Math.cos(angle);
+   return[240+(x-1.2)*130,174-(p[2]*100+depth*20)];
+ };
+ const origin=[0,0,0],axes=[{name:'X',v:[1,0,0],color:'#dba87b'},{name:'Y',v:[0,1,0],color:'#82bdd9'},{name:'Z',v:[0,0,1],color:'#a0e5ae'}];
+ for(const a of axes){
+  const p=project(origin),q=project(a.v);
+  svg.append(el('line',{x1:p[0],y1:p[1],x2:q[0],y2:q[1],stroke:a.color,'stroke-width':1.3,opacity:.6}));
+  const t=el('text',{x:q[0]+3,y:q[1]-3,fill:a.color,'font-size':12});t.textContent=a.name;svg.append(t);
+ }
+ for(const {k,sol} of confirmed){
+  const a=project(sol.pts.grip),b=project(sol.pts.tip);
+  svg.append(el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:'#9ae4ad','stroke-width':3,'stroke-linecap':'round'}));
+  svg.append(el('circle',{cx:a[0],cy:a[1],r:4,fill:'#63caff'}));
+  svg.append(el('circle',{cx:b[0],cy:b[1],r:4,fill:'#ffbd72'}));
+  const t=el('text',{x:b[0]+5,y:b[1]-4,'font-size':11,fill:'#cde9e0'});t.textContent=k;svg.append(t);
+ }
+ if(!confirmed.length){
+  const t=el('text',{x:250,y:105,'text-anchor':'middle',fill:'#b8cbd8','font-size':13});
+  t.textContent='まだ3D照合済みの線はありません';svg.append(t);
+ }
+}
+function status(){
+ if(!meta)return;
+ const r=samples[selected],sol=solve(r);
+ const need=[];
+ for(const view of ['top','side'])for(const k of ['grip','tip'])if(!r?.[view]?.[k])need.push((view==='top'?'上面':'側面')+(k==='grip'?'手元':'先端'));
+ let txt='P'+String(selected).padStart(2,'0')+'｜'+$('panelSelect').selectedOptions[0].text+' → '+$('endSelect').selectedOptions[0].text+'\n';
+ if(!sol)txt+='入力待ち：'+need.join('、');
+ else{
+  txt+='最大X座標差 '+fmt(sol.dx*100,1)+'cm｜3D長さ '+fmt(sol.length*100,1)+'cm';
+  txt+='\n'+(sol.acceptable?'座標と線長は大きく矛盾していません':'要確認：2投影のX対応または線長が一致しません');
+  if(r.matched)txt+='\n'+(sol.confirmed?'3D照合済み':'「同一時刻」を選択しましたが数値整合チェックに不合格');
+  else txt+='\n同じ時刻の線かどうかは未確認';
+ }
+ $('status').textContent=txt;
+}
+function rows(){
+ const t=$('sampleRows');t.replaceChildren();
+ const keys=Object.keys(samples).map(Number).sort((a,b)=>a-b);
+ if(!keys.length){
+  const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=6;td.textContent='校正値を設定済み。線の登録はまだありません。';tr.append(td);t.append(tr);return;
+ }
+ for(const k of keys){
+  const r=samples[k],s=solve(r),tr=document.createElement('tr');
+  tr.setAttribute('role','button');tr.tabIndex=0;if(k===selected)tr.className='selected';
+  const fields=[String(k),Object.keys(r.top||{}).length+'/2',Object.keys(r.side||{}).length+'/2',
+    s?fmt(s.dx*100,1)+'cm':'—',s?fmt(s.length*100,1)+'cm':'—',
+    !s?'入力中':s.confirmed?'確認済':r.matched?'不整合':'未確認'];
+  for(const value of fields){const td=document.createElement('td');td.textContent=value;tr.append(td)}
+  tr.addEventListener('click',()=>{$('sampleIndex').value=k;updateSelect();});
+  tr.addEventListener('keydown',e=>{if(e.key==='Enter'){$('sampleIndex').value=k;updateSelect();}});
+  t.append(tr);
+ }
+}
+function drawAll(){axisGuides();drawMarks();preview();status();rows();}
+function storeEdit(fn){
+ history.push(clone(samples));if(history.length>100)history.shift();
+ fn();save();drawAll();
+}
+function advance(){
+ const panel=$('panelSelect').value,part=$('endSelect').value;
+ if(part==='grip')$('endSelect').value='tip';
+ else if(panel==='top'){$('panelSelect').value='side';$('endSelect').value='grip'}
+ else{$('panelSelect').value='top';$('endSelect').value='grip';$('sampleIndex').value=Math.min(120,selected+1);selected=ix();}
+}
+function clickImage(e){
+ if(!meta)return;
+ const rect=$('overlay').getBoundingClientRect();
+ const px=(e.clientX-rect.left)/rect.width*591,py=(e.clientY-rect.top)/rect.height*1000;
+ const v=$('panelSelect').value;
+ if((v==='top'&&(py<34||py>440))||(v==='side'&&(py<546||py>957))||px<70||px>583){
+  $('status').textContent='選択中の投影図とクリック位置が異なります。上の図は「真上」、下の図は「横」です。';return;
+ }
+ const k=$('endSelect').value;
+ storeEdit(()=>{const r=record();r.type=$('type').value;r.matched=false;r[v][k]=[+px.toFixed(2),+py.toFixed(2)];advance();});
+}
+function dumpCsv(){
+ if(!meta)return;
+ const result=[['sample','relative_time_ms_unverified','type','grip_x','grip_y','grip_z','barrel_x','barrel_y','barrel_z','x_disagreement_m','length_m']];
+ for(const [id,r] of Object.entries(samples)){
+  const s=solve(r);if(!s?.confirmed)continue;
+  result.push([id,'',r.type,...s.pts.grip.map(x=>x.toFixed(5)),...s.pts.tip.map(x=>x.toFixed(5)),s.dx.toFixed(5),s.length.toFixed(5)]);
+ }
+ if(result.length===1){$('status').textContent='同じ時刻だと確認でき、かつ整合性チェックを通った線がありません。CSVには未確認点を出力しません。';return}
+ download(result.map(row=>row.join(',')).join('\n'),'fleisig-figure5-confirmed.csv','text/csv');
+}
+function dumpJson(){
+ const result={
+  schema:1,source:meta.source,doi:meta.doi,figureUrl:meta.figureUrl,
+  figurePixelSize:meta.imageSpace,calibration:meta.calibration,
+  samplingIntervalMs:5,important:'sample IDs do NOT establish time correspondence; only explicitly confirmed samples with consistent coordinates may be reconstructed',
+  annotationData:samples,
+  reconstructed:Object.fromEntries(Object.entries(samples).map(([k,r])=>[k,solve(r)])),
+  originalImageNotIncluded:true
+ };
+ download(JSON.stringify(result,null,2),'fleisig-figure5-annotations.json','application/json');
+}
+function download(s,name,mime){
+ const b=new Blob([s],{type:mime+';charset=utf-8'}),url=URL.createObjectURL(b);
+ const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+$('overlay').addEventListener('pointerup',clickImage);
+$('sampleIndex').addEventListener('change',updateSelect);
+$('type').addEventListener('change',()=>storeEdit(()=>{record().type=$('type').value;record().matched=false;}));
+$('matched').addEventListener('change',()=>{const ok=$('matched').checked;storeEdit(()=>{record().matched=ok;})});
+for(const id of ['panelSelect','endSelect'])$(id).addEventListener('change',status);
+for(const id of ['showAxes','showCandidate'])$(id).addEventListener('change',drawAll);
+$('zoom').addEventListener('input',()=>{
+ const z=+$('zoom').value;$('stage').style.width=(591*z)+'px';$('zoomOut').textContent=z.toFixed(2)+'×';
+});
+$('viewAngle').addEventListener('input',()=>{$('viewAngleLabel').textContent=$('viewAngle').value+'°';preview();});
+$('undo').addEventListener('click',()=>{if(!history.length)return;samples=history.pop();save();drawAll()});
+$('erase').addEventListener('click',()=>storeEdit(()=>{delete samples[selected]}));
+$('clear').addEventListener('click',()=>{if(confirm('保存した全サンプルを削除しますか？'))storeEdit(()=>{samples={};})});
+$('saveJson').addEventListener('click',dumpJson);
+$('saveCsv').addEventListener('click',dumpCsv);
+$('figure').addEventListener('error',()=>{$('loadFallback').style.display='block'});
+$('localImage').addEventListener('change',e=>{const file=e.target.files?.[0];if(!file)return;const url=URL.createObjectURL(file);$('figure').src=url;$('loadFallback').style.display='none'});
+fetch('./fleisig-figure5-seed.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('校正値を取得できません '+r.status);return r.json()}).then(d=>{
+ meta=d;try{samples=JSON.parse(localStorage.getItem(STORE)||'{}')}catch(e){samples={}}
+ drawAll();
+}).catch(e=>{$('status').textContent='校正ファイル読込失敗：'+String(e.message||e)});
+})();
+</script>
+</body></html>
