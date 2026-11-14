@@ -588,6 +588,12 @@ function pitchPointExtended(pitch,u){
   }
 }
 
+// The ball reaches the slanted ideal contact depth slightly before or after
+// the plate-front z depending on inside/outside course.
+function idealImpactU(pitch){
+  const z=idealImpactZ(pitch.target.x);
+  return (pitch.release.z-z)/(pitch.release.z-pitch.target.z);
+}
 function locationCap(target){
   const ox=Math.max(0,Math.abs(target.x)-PLATE_HALF)/REACH_X;
   const oy=Math.max(0,target.y-ZONE_HIGH,ZONE_LOW-target.y)/REACH_Y;
