@@ -149,9 +149,16 @@ export function batPose(src,frame,opts={}){
  const elapsed=impact-START_FRAME;
  const q=clamp((sourceFrame-START_FRAME)/Math.max(1,elapsed),0,1);
  const oldDirection=bezier(stance,early,control,contact,Math.pow(q,2.7));
+ // Retain the upright bat ELEVATION, but follow a monotonic overhead yaw
+ // through loading. Reorienting the old 3D direction only at frame 334
+ // would create an unwanted backward-turn artifact in overhead view.
+ const elevation=Math.asin(clamp(oldDirection[1],-1,1));
+ const yaw=desiredYaw*Math.PI/180;
+ const horizontal=Math.cos(elevation);
+ const prePlane=[-horizontal*Math.cos(yaw),Math.sin(elevation),horizontal*Math.sin(yaw)];
  const transition=clamp((shiftedFrame-319)/15,0,1);
  const blend=transition*transition*(3-2*transition);
- const dir=slerp(oldDirection,inPlane,blend);
+ const dir=slerp(prePlane,inPlane,blend);
 
  const grip=inferredGrip(src,frame);
  const barrel=add(grip,mul(dir,BAT_LENGTH_M));
