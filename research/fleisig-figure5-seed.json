@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "source": "Fleisig et al. (2002), Figure 5, Sports Engineering 5:1–8",
+  "doi": "10.1046/j.1460-2687.2002.00096.x",
+  "figureUrl": "https://www.academia.edu/figures/48188523/figure-5-digitized-motion-of-lefthanded-baseball-bat-swing",
+  "imageUrl": "https://figures.academia-assets.com/53176736/figure_005.jpg",
+  "imageSpace": {
+    "width": 591,
+    "height": 1000
+  },
+  "calibration": {
+    "top": {
+      "xPx0": 72,
+      "xPx3": 581,
+      "yPxMinus1": 437,
+      "yPx2": 36
+    },
+    "side": {
+      "xPx0": 72,
+      "xPx3": 581,
+      "zPx0": 954,
+      "zPx1_4": 551
+    }
+  },
+  "plottingNotes": [
+    "Top (a) axes: horizontal X(m) 0..3, vertical Y(m) -1..2.",
+    "Side (b) axes: horizontal X(m) 0..3, vertical Z(m) 0..1.4.",
+    "Bat marker locations in each figure are illustrated every 5 ms, but the source does not label each segment with a frame number.",
+    "Only axes can be read with high confidence; dense strokes can overlap, and the thick start/end bat lines are not necessarily the 0.56 m marker-to-marker segment.",
+    "Both panels share X coordinate in the original experiment. Screen-pixel measurements are approximate and must be verified using the rendered original.",
+    "No image pixels copied into repository; uses externally linked source."
+  ],
+  "initialAnnotation": {
+    "name": "太いバット線の試読点（要確認）",
+    "imageReadStatus": "unverified_candidate_not_digitized_measurement",
+    "frameId": null,
+    "sampleType": "full-bat-approximation",
+    "pairedSameTime": false,
+    "top": {
+      "gripPx": [
+        261,
+        219
+      ],
+      "barrelPx": [
+        272,
+        304
+      ]
+    },
+    "side": {
+      "gripPx": [
+        274,
+        789
+      ],
+      "barrelPx": [
+        253,
+        946
+      ]
+    },
+    "note": "Visually estimated coordinates for ONE ambiguous dark segment. Overhead/side correspondence, grip-vs-barrel assignment, and impact-time identification are NOT established. DO NOT export as validated time series."
+  },
+  "confirmedSamples": [],
+  "interpolation": "none",
+  "commercialization": "Research-only reference; copying copyrighted Figure 5 image or directly porting a reconstructed figure-derived motion into the commercial game requires separate rights review."
+}

@@ -146,7 +146,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
       <div class="ctrl"><label>Look Z <small>見る方向の奥行を調整。小さいほどホーム寄り。</small></label><input id="lookZ" type="range" min="-0.80" max="3.00" step="0.01" value="0.43"><output></output></div>
       <div class="ctrl"><label>FOV <small>縦方向の視野角。+で広角。80°を新しい基準値に設定。</small></label><input id="fov" type="range" min="55" max="105" step="1" value="80"><output></output></div>
     </div>
-    <div class="devNote">Camera X / Y / Z はカメラ本体を平行移動し、Look点も同じ量だけ移動します。<br><br>両モードの照準は「標準インパクト面」に固定。Aの透明なカプセルはボール中心の衝突許容範囲、Bの帯はスイートスポットの3D掃引軌道です。</div>
+    <div class="devNote">Camera X / Y / Z はカメラ本体を平行移動し、Look点も同じ量だけ移動します。<br><br>両モードの照準は従来の「標準インパクト面」に固定。Aの透明なカプセルは衝突許容範囲、Bの帯は新しい3Dスイングによる芯の掃引軌道です。ゲーム用のバット角度はFigure 11のB（−22.4°）、振り抜き面0°で固定。<a href="./research/swing-constrained-lab.html" target="_blank" rel="noopener" style="color:#a4e2f5">研究用の3視点ビューア</a>で後から再調整できます。</div>
     <div class="calActions"><button id="resetCam">RESET CAMERA</button><button id="closeCal">CLOSE</button></div>
   </aside>
 
@@ -154,7 +154,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
     <div class="card">
       <div class="eyebrow">IMPACT MODEL PLAYTEST</div>
       <h1>接触位置か、<br>3Dスイング軌道か。</h1>
-      <p>A「接触位置」とB「3D軌道」を切り替えて比較できます。水色の斜めの面がカーソルの移動範囲で、内角ほど投手寄りです。「面 ON/OFF」で切替できます。画面のどこに指を置いてもカーソルは飛ばず、ドラッグした分だけ動きます。離すとスイングします。</p>
+      <p>A「接触位置」とB「3D軌道」を切り替えて比較できます。スイングはCMUの手元軌道＋Figure 11 B・振り抜き面0°版です。水色の斜めの面が照準の移動範囲で、内角ほど投手寄り。「面 ON/OFF」で切替できます。指の置き場所にカーソルは飛ばず、ドラッグした分だけ動きます。離すとスイングします。</p>
       <button id="startBtn">START</button>
     </div>
   </div>
@@ -193,8 +193,9 @@ import * as THREE from 'three';
 import {PLATE_HALF,PLATE_FRONT,FLIGHT_MS,pitchPoint} from './pitch-model.js';
 import {IMPACT_SLOPE,BAT_LENGTH,GRIP_TO_CONTACT,SWEET_START,SWEET_END,
   BASE_TO_CONTACT_MS,BASE_PREP_MS,BASE_FOLLOW_THROUGH_MS,idealImpactZ,barrelAngle,
-  impactBatPose,swingPoseBundle,swingPoseAt,sweetSegment,pointOnSweet}
-  from './swing-kinematics.js';
+  impactBatPose,swingPoseBundle,swingPoseAt,sweetSegment,pointOnSweet,
+  BAT_GRIP_OFFSET,BAT_EFFECTIVE_TIP,installCapturedMotion}
+  from './playtest-swing-b0.mjs';
 
 
 const INTERVAL_MS=5000; // pitch-start-to-pitch-start interval
@@ -329,12 +330,12 @@ const batMesh=new THREE.Mesh(
   new THREE.CylinderGeometry(BAT_BARREL_RADIUS,BAT_HANDLE_RADIUS,BAT_LENGTH,18),
   new THREE.MeshStandardMaterial({color:0xc79a63,roughness:.60,metalness:.02})
 );
-batMesh.position.y=BAT_LENGTH/2;
+batMesh.position.y=(BAT_EFFECTIVE_TIP-BAT_GRIP_OFFSET)/2;
 worldBat.add(batMesh);
 const skinMat=new THREE.MeshStandardMaterial({color:0xd2a07a,roughness:.8});
 const handA=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),skinMat);
 const handB=new THREE.Mesh(new THREE.SphereGeometry(.034,12,8),skinMat);
-handA.position.y=.030;handB.position.y=.090;
+handA.position.y=-.025;handB.position.y=.045;
 worldBat.add(handA,handB);
 scene.add(worldBat);
 
@@ -533,6 +534,27 @@ const ui={
  cal:document.getElementById('cal'),start:document.getElementById('start')
 };
 
+// Keep all PR#2 touch and pitch UX; gate play until the real CMU body clip loads.
+let motionReady=false;
+const prototypeStartButton=document.getElementById('startBtn');
+prototypeStartButton.disabled=true;
+prototypeStartButton.textContent='データ読み込み中';
+fetch('./research/cmu124_07_swing.json',{cache:'no-store'})
+ .then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json()})
+ .then(data=>{
+  installCapturedMotion(data);
+  motionReady=true;
+  prototypeStartButton.disabled=false;
+  prototypeStartButton.textContent='START';
+ })
+ .catch(err=>{
+  motionReady=false;
+  prototypeStartButton.disabled=true;
+  prototypeStartButton.textContent='読み込み失敗';
+  document.getElementById('aimHint').textContent=
+    'スイングデータを読み込めませんでした。再読み込みしてください。';
+  console.error('CMU 124_07 unavailable',err);
+ });
 let S={phase:'idle',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rand=(a,b)=>a+Math.random()*(b-a);
 const cameraProbe=new THREE.PerspectiveCamera();
@@ -627,6 +649,7 @@ function nextPitch(now=performance.now()){
   impactStatus.textContent='CONTACT: —';
 }
 function begin(){
+  if(!motionReady)return;
   S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null};
   ui.score.textContent='0000';ui.pitchNo.textContent='0';ui.start.style.display='none';
   nextPitch(performance.now()+250)
