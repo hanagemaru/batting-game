@@ -29,7 +29,8 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
 .line{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .line strong{font:700 12px ui-monospace,monospace}
 .timeline{width:100%;accent-color:var(--green)}
-.controlsRow{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:6px}
+.controlsRow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+.controlsRow button{font-size:11px;padding:5px 2px}
 .options{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;font-size:11px;color:var(--muted)}
 .options label{display:flex;align-items:center;gap:4px}
 .options input{accent-color:var(--green)}
@@ -68,6 +69,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
   <button id="prev" type="button">前へ1フレーム</button>
   <button id="play" type="button" class="active">一時停止</button>
   <button id="next" type="button">次へ1フレーム</button>
+  <button id="contact" type="button">341へ移動</button>
  </div>
  <div class="options">
    <label><input id="trace" type="checkbox" checked>両手の軌跡</label>
@@ -76,14 +78,14 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
  </div>
  <div class="options"><label><input id="showBat" type="checkbox" checked>推定バット</label><label><input id="showBatTrail" type="checkbox" checked>先端・芯の軌跡</label><label><input id="showPlane" type="checkbox">スイング面（仮説）</label></div>
  <div class="options"><label>論文Figure 11の角度 <select id="profile" style="background:#173243;color:#fff;border:1px solid #648b9a;border-radius:6px;padding:5px"><option value="D">D −7.4°</option><option value="A">A −30.7°</option><option value="B">B −22.4°</option><option value="C">C −34.9°</option></select></label><label>振り抜き面の上昇 <input id="exitRise" type="range" min="-10" max="20" step="1" value="8"><span id="exitLabel">8°</span></label></div>
- <div class="note"><strong>実測：</strong>CMUの身体・両手の骨格軌跡。<strong>推定：</strong>両手の中点をグリップの代理とし、バット軸の3D回転曲線を生成。<strong>論文由来：</strong>接触時のバット傾き角4例だけ。バット先端と正確な接触時刻は計測されていません。</div>
+ <div class="note"><strong>今回の設定：</strong>フレーム341をコンタクトと仮定。バット全長86.4cm（手元から先端74cm、芯61cm）。コンタクト時は真上視点でベース前端と平行、振り抜きの3D追加回転195°（旧105°＋90°）。<strong>実測：</strong>CMUの身体・両手の骨格軌跡。<strong>推定：</strong>手の中点をグリップ代理とするバット姿勢と接触時刻。論文から参照するのは接触時のバット傾き角4例のみです。</div>
  <div class="source"><a href="https://mocap.cs.cmu.edu/" target="_blank" rel="noopener">CMU Graphics Lab MoCap</a>／<a href="https://github.com/una-dinosauria/cmu-mocap/blob/master/data/124/124_07.bvh" target="_blank" rel="noopener">取得元BVH</a>｜<a href="https://doi.org/10.3389/fspor.2025.1557145" target="_blank" rel="noopener">Nakashima et al. 2025（Fig.11、CC BY 4.0）</a>。論文の実測軌道を再現したものではありません。</div>
 </section>
 </main>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
-import {batPose,REFERENCE_PRESETS,BAT_LENGTH_M} from './bat-hypothesis.mjs';
+import {batPose,REFERENCE_PRESETS,BAT_LENGTH_M,BAT_TOTAL_LENGTH_M,GRIP_OFFSET_M,SWEET_M,CONTACT_FRAME,FOLLOW_THROUGH_DEG} from './bat-hypothesis.mjs';
 const $=id=>document.getElementById(id);
 const viewport=$('viewport'),canvas=$('canvas'),timeline=$('timeline'),status=$('status');
 let data=null,playing=true,rate=.35,frame=0,last=0,view='rear',activeCamera;
@@ -145,7 +147,7 @@ function makeScene(){
 }
 
 function createHypothesis(){
- const cylinder=new THREE.Mesh(new THREE.CylinderGeometry(.020,.015,BAT_LENGTH_M,12),
+ const cylinder=new THREE.Mesh(new THREE.CylinderGeometry(.020,.015,BAT_TOTAL_LENGTH_M,12),
   new THREE.MeshStandardMaterial({color:0xcad3db,metalness:.35,roughness:.5}));
  const barrelDot=new THREE.Mesh(new THREE.SphereGeometry(.031,10,8),
   new THREE.MeshBasicMaterial({color:0xf68ab6}));
@@ -171,7 +173,7 @@ function updateHypothesisTrace(){
    new THREE.Vector3(...batPose(data,i,options)[key]));
   line.geometry.dispose();line.geometry=new THREE.BufferGeometry().setFromPoints(points);
  }
- const contact=batPose(data,data.approximateEvents.contactFrame-data.clipStartFrame,options);
+ const contact=batPose(data,CONTACT_FRAME-data.clipStartFrame,options);
  const ax=new THREE.Vector3(...contact.dir);
  const normal=new THREE.Vector3(...contact.planeNormal);
  const ay=new THREE.Vector3().crossVectors(normal,ax).normalize();
@@ -182,7 +184,7 @@ function updateHypothesisTrace(){
 function drawHypothesis(){
  if(!data||!mock.cylinder)return null;
  const pose=batPose(data,frame,opts()),dir=new THREE.Vector3(...pose.dir);
- mock.cylinder.position.set(...pose.grip).addScaledVector(dir,BAT_LENGTH_M*.5);
+ mock.cylinder.position.set(...pose.grip).addScaledVector(dir,(BAT_LENGTH_M-GRIP_OFFSET_M)*.5);
  mock.cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);
  mock.barrel.position.set(...pose.barrel);mock.sweet.position.set(...pose.sweet);
  const on=$('showBat').checked;
@@ -222,15 +224,16 @@ function updatePose(){
  }
  const f=Math.round(frame),original=data.clipStartFrame+f,sec=f/data.fps;
  $('frameLabel').textContent='CMU frame '+original+' / '+(data.clipEndFrame)+' · '+sec.toFixed(2)+' 秒';
- const ev=data.approximateEvents;
+ const ev={...data.approximateEvents,contactFrame:CONTACT_FRAME};
  $('eventLabel').textContent=original<ev.loadFrame?'構え':original<ev.launchFrame?'踏み込み':original<ev.contactFrame?'スイング中':original===ev.contactFrame?'推定接触': '振り抜き';
  const lm=pts[grabNames.indexOf('handL')],rm=pts[grabNames.indexOf('handR')];
  drawHypothesis();
- const offsetMs=(frame-(data.approximateEvents.contactFrame-data.clipStartFrame))/data.fps*1000;
+ const offsetMs=(frame-(CONTACT_FRAME-data.clipStartFrame))/data.fps*1000;
  status.innerHTML='<strong>CMU 124_07｜'+$('eventLabel').textContent+'</strong>'
  +'<div>左右手の距離（実測）：'+Math.round(lm.distanceTo(rm)*100)+'cm</div>'
  +'<div>推定インパクトから '+Math.round(offsetMs)+'ms</div>'
- +'<div>バット先端速度（仮説）：'+hypothesisTipSpeed().toFixed(1)+'m/s</div>'
+ +'<div>バット先端速度（仮説）：'+hypothesisTipSpeed().toFixed(1)+'m/s （341付近で最大）</div>'
+ +'<div>手元→先端74cm・芯61cm｜接触後回転'+FOLLOW_THROUGH_DEG+'°</div>'
  +'<div>論文の接触傾き参考値：'+REFERENCE_PRESETS[$('profile').value].inclinationDeg+'°</div>'
  +'<div>バットの軌道は未計測・比較モデル</div>';
  timeline.value=String(Math.round(frame));
@@ -270,6 +273,7 @@ timeline.addEventListener('input',()=>{setPlaying(false);setFrame(+timeline.valu
 $('prev').addEventListener('click',()=>{setPlaying(false);setFrame(Math.round(frame)-1)});
 $('next').addEventListener('click',()=>{setPlaying(false);setFrame(Math.round(frame)+1)});
 $('play').addEventListener('click',()=>setPlaying(!playing));
+$('contact').addEventListener('click',()=>{setPlaying(false);setFrame(CONTACT_FRAME-data.clipStartFrame);});
 for(const id of ['trace','markers','showBat','showBatTrail','showPlane'])$(id).addEventListener('change',updatePose);
 for(const id of ['profile','exitRise'])$(id).addEventListener('input',()=>{
  $('exitLabel').textContent=$('exitRise').value+'°';
