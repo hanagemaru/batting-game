@@ -534,6 +534,27 @@ const ui={
  cal:document.getElementById('cal'),start:document.getElementById('start')
 };
 
+// Keep all PR#2 touch and pitch UX; gate play until the real CMU body clip loads.
+let motionReady=false;
+const prototypeStartButton=document.getElementById('startBtn');
+prototypeStartButton.disabled=true;
+prototypeStartButton.textContent='データ読み込み中';
+fetch('./research/cmu124_07_swing.json',{cache:'no-store'})
+ .then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json()})
+ .then(data=>{
+  installCapturedMotion(data);
+  motionReady=true;
+  prototypeStartButton.disabled=false;
+  prototypeStartButton.textContent='START';
+ })
+ .catch(err=>{
+  motionReady=false;
+  prototypeStartButton.disabled=true;
+  prototypeStartButton.textContent='読み込み失敗';
+  document.getElementById('aimHint').textContent=
+    'スイングデータを読み込めませんでした。再読み込みしてください。';
+  console.error('CMU 124_07 unavailable',err);
+ });
 let S={phase:'idle',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rand=(a,b)=>a+Math.random()*(b-a);
 const cameraProbe=new THREE.PerspectiveCamera();
@@ -628,6 +649,7 @@ function nextPitch(now=performance.now()){
   impactStatus.textContent='CONTACT: —';
 }
 function begin(){
+  if(!motionReady)return;
   S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null};
   ui.score.textContent='0000';ui.pitchNo.textContent='0';ui.start.style.display='none';
   nextPitch(performance.now()+250)
