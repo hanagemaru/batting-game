@@ -10,10 +10,15 @@ export const REFERENCE_PRESETS={
   C:{inclinationDeg:-34.9,upDownDeg:-1.6,leftRightDeg:-9.3,allowableDistanceM:.19},
   D:{inclinationDeg:-7.4,upDownDeg:-.5,leftRightDeg:-6.1,allowableDistanceM:.57}
 };
-export const BAT_LENGTH_M=.864;
-export const SWEET_M=.72;
-export const START_FRAME=274; // user-adjustable candidate start; not a measured swing event
-export const CONTACT_FRAME=336; // inferred from CMU third-party visualization; not observed impact
+// 86.4cm full bat includes a short portion extending behind the hands.
+// The user-facing effective distances begin at the hand-midpoint grip proxy.
+export const BAT_TOTAL_LENGTH_M=.864;
+export const BAT_LENGTH_M=.74; // hand proxy -> barrel tip
+export const GRIP_OFFSET_M=BAT_TOTAL_LENGTH_M-BAT_LENGTH_M; // knob behind hands
+export const SWEET_M=.61; // hand proxy -> estimated sweet spot
+export const START_FRAME=274; // hand/body motion uses CMU frames, start unmeasured
+export const CONTACT_FRAME=341; // user's visual contact estimate, NOT measured ball contact
+export const FOLLOW_THROUGH_DEG=195; // prior 105° + requested ~90°
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const add=(a,b)=>a.map((v,i)=>v+b[i]);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
@@ -75,8 +80,10 @@ export function batPose(src,frame,opts={}){
  const{contact,tangent,planeNormal}=contactAndPlane(profile,rise);
  // A single spherical Bezier from upright stance to contact, with no
  // orientation keyframe at the artificial "launch" time.
- const stance=norm([-.19,.93,-.32]);
- const early=norm([-.42,.83,-.35]);
+ // Increase the overhead pre-contact turn without artificially speeding up
+ // the entire stance-to-impact movement. This is a geometric hypothesis.
+ const stance=norm([-.08,.94,-.55]);
+ const early=norm([-.20,.82,-.55]);
  const control=rotateInPlane(contact,tangent,-70*Math.PI/180);
  let dir;
  if(rel<=impact-src.clipStartFrame){
@@ -85,7 +92,7 @@ export function batPose(src,frame,opts={}){
  }else{
    const q=clamp((rel-(impact-src.clipStartFrame))/
                    (src.clipEndFrame-impact),0,1);
-   const exitAngle=105*Math.PI/180;
+   const exitAngle=FOLLOW_THROUGH_DEG*Math.PI/180;
    // Choose exponential deceleration coefficient so initial FOLLOW angular
    // velocity matches the precontact spherical-Bezier end tangent.
    const incomingAngularSpeed=3*(70*Math.PI/180)*2.7/span; // radians per source frame
@@ -103,7 +110,8 @@ export function batPose(src,frame,opts={}){
  const grip=inferredGrip(src,frame);
  const barrel=add(grip,mul(dir,BAT_LENGTH_M));
  const sweet=add(grip,mul(dir,SWEET_M));
- return {grip,dir,barrel,sweet,planeNormal,profile,handSeparation:handSeparation(src,frame),
+ const knob=add(grip,mul(dir,-GRIP_OFFSET_M));
+ return {grip,dir,barrel,sweet,knob,planeNormal,profile,handSeparation:handSeparation(src,frame),
    derived:true,
-   confidence:'hypothesis-only: measured wrist midpoint + modeled bat axis'};
+   confidence:'hypothesis-only: measured hand-joint midpoint + modeled bat axis; contact frame 341 is an estimate'};
 }
