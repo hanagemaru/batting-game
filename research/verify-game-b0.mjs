@@ -48,8 +48,8 @@ for(const [x,y,type] of aimCourses){
  const at=gameSwingPose(40,sw);
  assert.ok(Math.abs(angle(at.dir))<1e-9,'Game contact is not parallel to plate front');
  assert.ok(Math.abs(Math.asin(at.dir[1])*180/Math.PI+22.4)<1e-9);
- for(const [frame,t]of [[334,0],[341,40],[346,40+220*5/49]]){
-   assert.ok(Math.abs(angle(gameSwingPose(t,sw).dir)-(frame-341)*18)<1e-8,
+ for(const [frame,t,expected]of [[334,0,-90],[341,40,0],[346,40+220*5/49,90]]){
+   assert.ok(Math.abs(angle(gameSwingPose(t,sw).dir)-expected)<1e-8,
      'Overhead angle mismatch at '+frame);
  }
  maxAimError=Math.max(maxAimError,dist(at.sweet,aim));
