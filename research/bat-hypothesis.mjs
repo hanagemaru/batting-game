@@ -68,50 +68,98 @@ export function inferredGrip(src,frame){
 export function handSeparation(src,frame){
  return len(sub(framePoint(src,frame,'handL'),framePoint(src,frame,'handR')));
 }
+// Exact overhead bat-axis checkpoints relative to home-plate front edge (X):
+// 334: -90° (backswing-side perpendicular), 341: 0° (parallel),
+// 346: +90° (opposite perpendicular), 390: +195° (full follow-through).
+// These are user-requested angular constraints, NOT additional mocap samples.
+export const OVERHEAD_ANGLE_KEYFRAMES=Object.freeze([
+ {frame:250,deg:-145,degPerFrame:0},
+ {frame:313,deg:-145,degPerFrame:0},
+ {frame:334,deg:-90,degPerFrame:4},
+ {frame:341,deg:0,degPerFrame:28},
+ {frame:346,deg:90,degPerFrame:12},
+ {frame:390,deg:195,degPerFrame:0}
+]);
+
+function hermite(u,p0,p1,tan0,tan1){
+ const u2=u*u,u3=u2*u;
+ return (2*u3-3*u2+1)*p0 + (u3-2*u2+u)*tan0
+   +(-2*u3+3*u2)*p1 +(u3-u2)*tan1;
+}
+
+export function overheadAngleDegrees(sourceFrame){
+ const knots=OVERHEAD_ANGLE_KEYFRAMES;
+ if(sourceFrame<=knots[0].frame)return knots[0].deg;
+ // 346 -> 390 uses an exponential slowdown to avoid a cubic overshoot.
+ // The decay constant is chosen to integrate exactly 105° and to join
+ // continuously at the 346-frame slope of 12°/frame.
+ if(sourceFrame>346){
+  const span=390-346,total=195-90,initialRate=12;
+  let low=.000001,high=2;
+  for(let i=0;i<48;i++){
+   const lambda=(low+high)/2;
+   const area=initialRate*(-Math.expm1(-lambda*span))/lambda;
+   if(area>total)low=lambda;else high=lambda;
+  }
+  const lambda=(low+high)/2;
+  return 90 + initialRate*(-Math.expm1(-lambda*(sourceFrame-346)))/lambda;
+ }
+ let i=0;
+ while(i<knots.length-2&&sourceFrame>knots[i+1].frame)i++;
+ const A=knots[i],B=knots[i+1],width=B.frame-A.frame;
+ return hermite(clamp((sourceFrame-A.frame)/width,0,1),A.deg,B.deg,
+  A.degPerFrame*width,B.degPerFrame*width);
+}
+
+// Map a requested TOP-VIEW azimuth back onto the previously chosen fixed
+// 3D swing plane. This keeps elevation and swing-plane continuity coherent,
+// instead of independently animating yaw and pitch after ball contact.
+function planeDirectionForAzimuth(contact,tangent,azimuthDeg){
+ const rad=azimuthDeg*Math.PI/180;
+ // Want horizontal projection [-cos(rad), sin(rad)].
+ const Y=Math.sin(rad)/tangent[2];
+ const X=(-Math.cos(rad)-tangent[0]*Y)/contact[0];
+ let phi=Math.atan2(Y,X);
+ while(phi-rad>Math.PI)phi-=2*Math.PI;
+ while(phi-rad< -Math.PI)phi+=2*Math.PI;
+ return rotateInPlane(contact,tangent,phi);
+}
+
 export function batPose(src,frame,opts={}){
  const profile=opts.profile||'D';
  const rise=Number.isFinite(opts.exitRiseDeg)?opts.exitRiseDeg:8;
- const begin=Number.isFinite(opts.beginFrame)?opts.beginFrame:START_FRAME;
  const impact=Number.isFinite(opts.contactFrame)?opts.contactFrame:CONTACT_FRAME;
  if(!REFERENCE_PRESETS[profile])throw Error('Unknown study profile');
- if(!(begin<impact&&impact<src.frames.length+src.clipStartFrame))
-   throw Error('Invalid study frame range');
- const span=impact-begin,rel=frame;
- const{contact,tangent,planeNormal}=contactAndPlane(profile,rise);
- // A single spherical Bezier from upright stance to contact, with no
- // orientation keyframe at the artificial "launch" time.
- // Increase the overhead pre-contact turn without artificially speeding up
- // the entire stance-to-impact movement. This is a geometric hypothesis.
+ if(!(impact>src.clipStartFrame+8&&impact<src.clipEndFrame-8))
+   throw Error('Invalid study contact frame');
+ const {contact,tangent,planeNormal}=contactAndPlane(profile,rise);
+ const sourceFrame=src.clipStartFrame+frame;
+ // Keep the selected impact point at the 341-frame anchor if a research
+ // caller overrides it; measured hand coordinates are NEVER resampled.
+ const shiftedFrame=sourceFrame-(impact-CONTACT_FRAME);
+ const desiredYaw=overheadAngleDegrees(shiftedFrame);
+ const inPlane=planeDirectionForAzimuth(contact,tangent,desiredYaw);
+
+ // Preserve an upright preparation pose from the previous experiment.
+ // Blend only the *bat direction* into the planar high-speed swing over
+ // frames 319..334; the measured hand-midpoint trajectory is unchanged.
  const stance=norm([-.08,.94,-.55]);
  const early=norm([-.20,.82,-.55]);
  const control=rotateInPlane(contact,tangent,-70*Math.PI/180);
- let dir;
- if(rel<=impact-src.clipStartFrame){
-   const q=clamp((rel-(begin-src.clipStartFrame))/span,0,1);
-   dir=bezier(stance,early,control,contact,Math.pow(q,2.7));
- }else{
-   const q=clamp((rel-(impact-src.clipStartFrame))/
-                   (src.clipEndFrame-impact),0,1);
-   const exitAngle=FOLLOW_THROUGH_DEG*Math.PI/180;
-   // Choose exponential deceleration coefficient so initial FOLLOW angular
-   // velocity matches the precontact spherical-Bezier end tangent.
-   const incomingAngularSpeed=3*(70*Math.PI/180)*2.7/span; // radians per source frame
-   const targetFactor=incomingAngularSpeed*
-      (src.clipEndFrame-impact)/exitAngle;
-   let lo=.000001,hi=15;
-   for(let i=0;i<50;i++){
-      const m=(lo+hi)/2,rate=m/(1-Math.exp(-m));
-      if(rate<targetFactor)lo=m;else hi=m;
-   }
-   const k=(lo+hi)/2;
-   const progress=(1-Math.exp(-k*q))/(1-Math.exp(-k));
-   dir=rotateInPlane(contact,tangent,exitAngle*progress);
- }
+ const elapsed=impact-START_FRAME;
+ const q=clamp((sourceFrame-START_FRAME)/Math.max(1,elapsed),0,1);
+ const oldDirection=bezier(stance,early,control,contact,Math.pow(q,2.7));
+ const transition=clamp((shiftedFrame-319)/15,0,1);
+ const blend=transition*transition*(3-2*transition);
+ const dir=slerp(oldDirection,inPlane,blend);
+
  const grip=inferredGrip(src,frame);
  const barrel=add(grip,mul(dir,BAT_LENGTH_M));
  const sweet=add(grip,mul(dir,SWEET_M));
  const knob=add(grip,mul(dir,-GRIP_OFFSET_M));
- return {grip,dir,barrel,sweet,knob,planeNormal,profile,handSeparation:handSeparation(src,frame),
+ return {grip,dir,barrel,sweet,knob,planeNormal,profile,
+   handSeparation:handSeparation(src,frame),
+   modeledOverheadAngleDeg:desiredYaw,
    derived:true,
-   confidence:'hypothesis-only: measured hand-joint midpoint + modeled bat axis; contact frame 341 is an estimate'};
+   confidence:'hypothesis-only; CMU hands fixed, bat azimuth anchored at 334/341/346'};
 }
