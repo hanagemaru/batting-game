@@ -193,8 +193,9 @@ import * as THREE from 'three';
 import {PLATE_HALF,PLATE_FRONT,FLIGHT_MS,pitchPoint} from './pitch-model.js';
 import {IMPACT_SLOPE,BAT_LENGTH,GRIP_TO_CONTACT,SWEET_START,SWEET_END,
   BASE_TO_CONTACT_MS,BASE_PREP_MS,BASE_FOLLOW_THROUGH_MS,idealImpactZ,barrelAngle,
-  impactBatPose,swingPoseBundle,swingPoseAt,sweetSegment,pointOnSweet}
-  from './swing-kinematics.js';
+  impactBatPose,swingPoseBundle,swingPoseAt,sweetSegment,pointOnSweet,
+  BAT_GRIP_OFFSET,BAT_EFFECTIVE_TIP,installCapturedMotion}
+  from './playtest-swing-b0.mjs';
 
 
 const INTERVAL_MS=5000; // pitch-start-to-pitch-start interval
@@ -329,12 +330,12 @@ const batMesh=new THREE.Mesh(
   new THREE.CylinderGeometry(BAT_BARREL_RADIUS,BAT_HANDLE_RADIUS,BAT_LENGTH,18),
   new THREE.MeshStandardMaterial({color:0xc79a63,roughness:.60,metalness:.02})
 );
-batMesh.position.y=BAT_LENGTH/2;
+batMesh.position.y=(BAT_EFFECTIVE_TIP-BAT_GRIP_OFFSET)/2;
 worldBat.add(batMesh);
 const skinMat=new THREE.MeshStandardMaterial({color:0xd2a07a,roughness:.8});
 const handA=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),skinMat);
 const handB=new THREE.Mesh(new THREE.SphereGeometry(.034,12,8),skinMat);
-handA.position.y=.030;handB.position.y=.090;
+handA.position.y=-.025;handB.position.y=.045;
 worldBat.add(handA,handB);
 scene.add(worldBat);
 
