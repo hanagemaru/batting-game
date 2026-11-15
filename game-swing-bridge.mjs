@@ -9,7 +9,7 @@ export const GAME_SWING_CONFIG=Object.freeze({
   profile:'B',exitRiseDeg:0,contactFrame:CONTACT_FRAME,
   releaseFrame:334,followEndFrame:390,
   physicalBatLengthM:BAT_TOTAL_LENGTH_M,
-  gripToTipM:BAT_LENGTH,gripToSweetM:SWEET_M,
+  gripToTipM:BAT_LENGTH_M,gripToSweetM:SWEET_M,
   gripToKnobM:GRIP_OFFSET_M,
   sweetStartM:.53,sweetEndM:.69
 });
