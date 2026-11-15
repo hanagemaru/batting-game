@@ -10,7 +10,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif}
 button,input{font:inherit}
-main{height:100dvh;display:flex;flex-direction:column;max-width:900px;margin:0 auto}
+main{min-height:100dvh;display:flex;flex-direction:column;max-width:900px;margin:0 auto}
 header{flex:none;display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:12px 13px 9px;border-bottom:1px solid var(--border)}
 h1{font-size:16px;line-height:1.25;margin:0}
 header small{display:block;margin-top:5px;font-size:11px;color:var(--muted)}
@@ -20,10 +20,17 @@ a{color:#a6e4ff}
 button{background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--fg);min-height:36px;padding:6px 7px;font-size:12px;font-weight:700}
 button.active{background:#194134;border-color:var(--green);color:#e0ffea}
 button:focus-visible,input:focus-visible{outline:2px solid #b4f5d0;outline-offset:2px}
-.viewport{min-height:170px;flex:1 1 auto;position:relative;overflow:hidden;margin:0 10px 6px;border-radius:9px;border:1px solid #28404f;background:#091821}
+.viewport{height:clamp(290px,44dvh,560px);flex:none;position:relative;overflow:hidden;margin:0 10px 7px;border-radius:9px;border:1px solid #28404f;background:#091821}
 canvas{width:100%;height:100%;display:block;touch-action:none}
-.status{position:absolute;top:10px;left:10px;max-width:calc(100% - 20px);padding:8px;border:1px solid #355364;background:#091922db;border-radius:5px;font:11px/1.5 ui-monospace,monospace;pointer-events:none}
-.legend{display:flex;gap:9px;flex-wrap:wrap;align-items:center;padding:6px 8px;position:absolute;bottom:7px;left:7px;right:7px;background:#071722da;border-radius:5px;font-size:10px;pointer-events:none}
+.status{padding:7px 8px 9px;border-top:1px solid #29404f;background:#0b1c28;font:11px/1.55 ui-monospace,monospace;word-break:break-word}
+.legend{display:flex;gap:12px;align-items:center;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;padding:5px 13px 8px;font-size:10px;color:var(--muted)}
+.legend span{flex:none}
+.readouts{margin:0 10px 10px;border:1px solid #355364;border-radius:7px;background:#0b1c28;flex:none}
+.readouts summary{padding:8px 10px;cursor:pointer;color:#d2e6f1;font-size:12px;display:flex;align-items:center;gap:8px;list-style:none}
+.readouts summary::-webkit-details-marker{display:none}
+.readouts summary::before{content:'▸';color:var(--green);flex:none}
+.readouts[open] summary::before{content:'▾'}
+.readouts summary .brief{color:var(--muted);margin-left:auto;font:11px ui-monospace,monospace;text-align:right}
 .legend i{display:inline-block;height:5px;width:14px;border-radius:4px;vertical-align:middle;margin-right:4px}
 .controls{flex:none;padding:10px 13px calc(11px + env(safe-area-inset-bottom));border-top:1px solid var(--border);background:#08151e;display:grid;gap:9px}
 .line{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -39,6 +46,8 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
 .source{font-size:10px;color:#91aebd}
 .error{color:#ffbbbb;white-space:pre-wrap;font-size:12px}
 @media(max-height:720px){header{padding:7px 10px}.tabs{padding:4px 9px}.controls{gap:5px;padding-top:6px}.note{font-size:10px}.headerMeta{display:none}}
+@media(min-width:760px) and (min-height:690px){main{height:100dvh}.viewport{height:auto;min-height:290px;flex:1 1 auto}}
+@media(max-width:540px){.controls{padding-top:8px}.readouts{margin-bottom:8px}.legend{font-size:10px}}
 </style>
 </head>
 <body>
@@ -54,14 +63,17 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
 </div>
 <div class="viewport" id="viewport">
  <canvas id="canvas"></canvas>
- <div id="status" class="status">CMUデータを読み込み中…</div>
- <div class="legend">
+</div>
+<div class="legend" aria-label="表示色の説明">
   <span><i style="background:#75c7ff"></i>左手</span>
   <span><i style="background:#ffcb82"></i>右手</span>
   <span><i style="background:#9de3a3"></i>両手の中点（計算値）</span>
   <span><i style="background:#d5e4f1"></i>身体</span><span><i style="background:#f68ab6"></i>推定の先端</span><span><i style="background:#ffe78b"></i>推定の芯</span>
- </div>
 </div>
+<details class="readouts" id="readouts">
+ <summary>数値データ <span id="briefStatus" class="brief" aria-live="off">CMUデータを読み込み中…</span></summary>
+ <div id="status" class="status">数値データを準備中…</div>
+</details>
 <section class="controls">
  <div class="line"><strong id="frameLabel">-- / --</strong><strong id="eventLabel">--</strong></div>
  <input id="timeline" class="timeline" type="range" min="0" max="140" step="1" value="0" aria-label="モーションのフレーム">
@@ -236,6 +248,7 @@ function updatePose(){
  +'<div>手元→先端74cm・芯61cm｜接触後回転'+FOLLOW_THROUGH_DEG+'°</div>'
  +'<div>論文の接触傾き参考値：'+REFERENCE_PRESETS[$('profile').value].inclinationDeg+'°</div>'
  +'<div>バットの軌道は未計測・比較モデル</div>';
+ $('briefStatus').textContent='接触まで '+Math.round(-offsetMs)+'ms ／ 推定先端 '+hypothesisTipSpeed().toFixed(1)+'m/s';
  timeline.value=String(Math.round(frame));
 }
 function setFrame(f){
@@ -303,7 +316,7 @@ fetch('./cmu124_07_swing.json',{cache:'no-store'})
   data=d;timeline.max=String(d.frames.length-1);
   makeScene();createHypothesis();setFrame(0);setView('rear');
  })
- .catch(err=>{status.classList.add('error');status.textContent=String(err.message||err)});
+ .catch(err=>{status.classList.add('error');status.textContent=String(err.message||err);$('briefStatus').textContent='データ読み込みエラー';});
 </script>
 </body>
 </html>
