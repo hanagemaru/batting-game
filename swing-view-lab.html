@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07141c">
+<title>BATTER'S READ — Swing Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#071118;--line:#31444e;--text:#eaf2f6;--muted:#a5b8c3;--accent:#8de7b1}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}
+body{overflow:hidden}
+main{width:min(100%,780px);height:100dvh;margin:auto;display:flex;flex-direction:column}
+header{flex:0 0 auto;padding:11px 14px 8px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px}
+header h1{margin:0;font-size:15px;letter-spacing:.02em}
+header p{margin:3px 0 0;font-size:10px;color:var(--muted)}
+a{color:#b4e9ff;font-size:11px;text-decoration:none}
+.viewSwitch{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px 12px 5px}
+button,select,input{font:inherit;color:var(--text)}
+button{border:1px solid #43616c;border-radius:7px;background:#13242e;padding:10px 6px;font-weight:650;font-size:12px}
+button.active{background:#235040;border-color:#8de7b1;color:#e4fff0}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #b5f9d2;outline-offset:2px}
+.viewport{position:relative;flex:1 1 auto;min-height:140px;margin:3px 10px 0;border:1px solid #233c47;border-radius:8px;overflow:hidden;background:#06131b}
+canvas{display:block;width:100%;height:100%}
+.hud{position:absolute;top:10px;left:10px;max-width:calc(100% - 20px);border-radius:6px;background:#081722ce;padding:7px 10px;font:11px/1.5 ui-monospace,monospace;pointer-events:none;color:#d2e6ee}
+.hud strong{color:#b7ffce}
+.legend{position:absolute;left:9px;bottom:7px;background:#06121cd9;border-radius:5px;padding:6px 9px;font-size:10px;display:flex;gap:12px;flex-wrap:wrap;pointer-events:none}
+.legend span::before{content:"";display:inline-block;width:10px;height:3px;margin-right:4px;vertical-align:middle;background:var(--line-color)}
+.legend span:nth-child(1){--line-color:#5bc0ff}
+.legend span:nth-child(2){--line-color:#ffc269}
+.legend span:nth-child(3){--line-color:#8de7b1}
+.legend span:nth-child(4){--line-color:#d295ff}
+.controls{flex:0 0 auto;padding:9px 12px calc(9px + env(safe-area-inset-bottom));border-top:1px solid var(--line);display:grid;gap:9px;background:#0a1922}
+.timelineLine{display:flex;align-items:center;justify-content:space-between;font-size:12px}
+.timelineLine strong{font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:#8de7b1}
+.rangeWrap{position:relative}
+.impactMark{position:absolute;top:-4px;height:16px;width:2px;background:#f1e8a8;pointer-events:none}
+.buttonRow{display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:7px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.fields label{display:grid;gap:4px;font-size:11px;color:var(--muted)}
+select{min-height:33px;background:#122632;border:1px solid #43616c;border-radius:6px;padding:5px 9px;font-size:12px}
+.options{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)}
+.options input{accent-color:#d295ff}
+.note{font-size:10px;color:var(--muted);line-height:1.35}
+@media(max-height:720px){header{padding:7px 12px}.viewSwitch{padding:5px 10px}.controls{gap:6px;padding-top:6px}.note{display:none}.viewport{margin:1px 8px 0}.fields label{font-size:10px}}
+</style>
+</head>
+<body>
+<main>
+<header><div><h1>スイング軌道の診断</h1><p>ゲーム本体と同じスイング計算を表示</p></div><a href="./playtest-impact-ab.html">ゲームへ戻る</a></header>
+<div class="viewSwitch" role="group" aria-label="観察方向">
+<button type="button" data-view="rear" class="active" aria-pressed="true">真後ろ</button>
+<button type="button" data-view="top" aria-pressed="false">真上</button>
+<button type="button" data-view="batter" aria-pressed="false">打者視点</button>
+</div>
+<div class="viewport" id="viewport">
+<canvas id="canvas"></canvas>
+<div class="hud" id="hud"><strong>インパクト</strong> ±0 ms</div>
+<div class="legend"><span>グリップ</span><span>ヘッド</span><span>芯</span><span>旧ヘッド</span></div>
+</div>
+<section class="controls">
+<div class="timelineLine"><span>スイング時刻</span><strong id="timeLabel">インパクト</strong></div>
+<div class="rangeWrap">
+<input id="timeline" type="range" min="0" max="1000" step="1" value="320" aria-label="スイング時刻">
+<div id="impactMark" class="impactMark"></div>
+</div>
+<div class="buttonRow">
+<button type="button" id="back">−5ms</button>
+<button type="button" id="play" class="active">再生</button>
+<button type="button" id="forward">+5ms</button>
+</div>
+<div class="fields">
+<label>横方向（右打者基準）<select id="course"><option value="0">真ん中</option><option value=".15">インコース</option><option value="-.15">アウトコース</option></select></label>
+<label>高さ<select id="height"><option value=".84">真ん中</option><option value="1.07">高め</option><option value=".60">低め</option></select></label>
+</div>
+<div class="fields">
+<label>構えたバットの角度<select id="stanceAngle"><option value="50">50°（やや寝かせる）</option><option value="70" selected>70°（標準）</option><option value="82">82°（ほぼ垂直）</option></select></label>
+<label>投球の球種<select id="pitchType"><option value="FAST">ストレート</option><option value="CURVE">カーブ</option><option value="FORK">フォーク</option></select></label>
+</div>
+<label class="options"><input type="checkbox" id="showPitchPath" checked> ボールの参考軌道を表示</label>
+<label class="options"><input type="checkbox" id="showWholeSwing" checked> 動作全体のバット姿勢を重ねる</label>
+<label class="options"><input type="checkbox" id="oldTrace"> 旧モデルのヘッド軌道も比較表示</label>
+<div class="note">構えからインパクトまで、上下角度と左右回転を別々に補間せず、バットの3D姿勢全体を一続きの曲線で動かします。薄いバットの線は動作全体の姿勢のサンプルです。40msの操作反応は維持しています。</div>
+</section>
+</main>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {PLATE_HALF,PLATE_FRONT,pitchPoint} from './pitch-model.js';
+import {BAT_LENGTH,SWEET_START,SWEET_END,IMPACT_SLOPE,
+ impactBatPose,swingAtAim,swingPoseAt,rotateY} from './swing-kinematics.js';
+
+const el=id=>document.getElementById(id);
+const viewport=el('viewport'),canvas=el('canvas'),timeline=el('timeline'),playBtn=el('play');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x07141c);
+scene.add(new THREE.HemisphereLight(0xc7e7ff,0x41534a,2.1));
+const light=new THREE.DirectionalLight(0xffffff,2.3);
+light.position.set(2,5,3);scene.add(light);
+
+const floor=new THREE.GridHelper(4,20,0x365560,0x213740);
+floor.position.set(0,-.01,.4);scene.add(floor);
+const plate=new THREE.Mesh(
+ new THREE.ShapeGeometry((()=>{const sh=new THREE.Shape();sh.moveTo(-PLATE_HALF,PLATE_FRONT);sh.lineTo(PLATE_HALF,PLATE_FRONT);sh.lineTo(PLATE_HALF,PLATE_HALF);sh.lineTo(0,0);sh.lineTo(-PLATE_HALF,PLATE_HALF);sh.closePath();return sh})()),
+ new THREE.MeshBasicMaterial({color:0xd7e3eb,side:THREE.DoubleSide,transparent:true,opacity:.7})
+);
+// ShapeGeometry local XY to world XZ, positive Z = pitcher.
+plate.rotation.x=Math.PI/2;plate.position.y=.005;scene.add(plate);
+const axisX=new THREE.ArrowHelper(new THREE.Vector3(1,0,0),new THREE.Vector3(0,.02,-.6),.75,0x6d9fc7,.10,.045);
+const axisZ=new THREE.ArrowHelper(new THREE.Vector3(0,0,1),new THREE.Vector3(0,.02,-.6),.75,0xe0b879,.10,.045);
+scene.add(axisX,axisZ);
+const zonePoints=[
+ new THREE.Vector3(-PLATE_HALF,.52,PLATE_FRONT),
+ new THREE.Vector3( PLATE_HALF,.52,PLATE_FRONT),
+ new THREE.Vector3( PLATE_HALF,1.16,PLATE_FRONT),
+ new THREE.Vector3(-PLATE_HALF,1.16,PLATE_FRONT),
+ new THREE.Vector3(-PLATE_HALF,.52,PLATE_FRONT)
+];
+const zone=new THREE.Line(new THREE.BufferGeometry().setFromPoints(zonePoints),
+ new THREE.LineBasicMaterial({color:0xb8c9d5,transparent:true,opacity:.4}));
+scene.add(zone);
+
+const batGroup=new THREE.Group();
+const bat=new THREE.Mesh(new THREE.CylinderGeometry(.033,.014,BAT_LENGTH,16),
+ new THREE.MeshStandardMaterial({color:0xe1bd8f,roughness:.55}));
+bat.position.y=BAT_LENGTH/2;batGroup.add(bat);
+const handle=new THREE.Mesh(new THREE.SphereGeometry(.034,14,10),
+ new THREE.MeshStandardMaterial({color:0x5bc0ff}));
+batGroup.add(handle);
+scene.add(batGroup);
+const ball=new THREE.Mesh(new THREE.SphereGeometry(.0365,16,12),
+ new THREE.MeshStandardMaterial({color:0xffffff,transparent:true,opacity:.75}));
+scene.add(ball);
+// A near-plate reference pitch line from the same pitchPoint() as the game.
+const referencePitchPath=new THREE.Line(
+ new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
+ new THREE.LineBasicMaterial({color:0xafdfff,transparent:true,opacity:.82,depthWrite:false})
+);
+scene.add(referencePitchPath);
+const pitchColors={FAST:0xd9f1ff,CURVE:0x9fd7ff,FORK:0xffd99d};
+const pitchNames={FAST:'ストレート',CURVE:'カーブ',FORK:'フォーク'};
+function updateReferencePitch(x,y){
+ const type=el('pitchType').value;
+ const pitch={
+  type,target:{x,y,z:PLATE_FRONT},
+  release:{x:.18,y:1.82,z:16.8},
+  dir:1,breakX:.25,breakY:type==='CURVE'?.10:type==='FORK'?.19:.055
+ };
+ const points=[];
+ for(let i=0;i<=96;i++){
+  const u=.70+.30*i/96;
+  const pos=pitchPoint(pitch,u);
+  points.push(new THREE.Vector3(pos.x,pos.y,pos.z));
+ }
+ referencePitchPath.geometry.dispose();
+ referencePitchPath.geometry=new THREE.BufferGeometry().setFromPoints(points);
+ referencePitchPath.material.color.setHex(pitchColors[type]);
+ referencePitchPath.visible=el('showPitchPath').checked;
+}
+
+const impactPlanePts=[
+ [-.38,.35], [.38,.35],[.38,1.34],[-.38,1.34]
+].map(([x,y])=>new THREE.Vector3(x,y,PLATE_FRONT+IMPACT_SLOPE*x));
+const surface=new THREE.Mesh(new THREE.BufferGeometry(),
+  new THREE.MeshBasicMaterial({color:0x72b8dd,transparent:true,opacity:.10,side:THREE.DoubleSide,depthWrite:false}));
+surface.geometry.setAttribute('position',new THREE.Float32BufferAttribute(
+ [0,1,2,0,2,3].flatMap(i=>impactPlanePts[i].toArray()),3));
+surface.geometry.computeVertexNormals();scene.add(surface);
+const edge=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(impactPlanePts),
+  new THREE.LineBasicMaterial({color:0x8bd5ef,transparent:true,opacity:.42}));
+scene.add(edge);
+
+const orthographic=new THREE.OrthographicCamera(-1.7,1.7,1.7,-1.7,.02,30);
+const batterCamera=new THREE.PerspectiveCamera(80,1,.03,40);
+const viewButtons=[...document.querySelectorAll('[data-view]')];
+let activeView='rear',playing=true,lastTime=0,progress=0,sw=null;
+// Faint snapshots let the player judge the WHOLE barrel rotation,
+ // rather than the local tangent of a single colored trajectory.
+const wholeSwingGhosts=new THREE.Group();scene.add(wholeSwingGhosts);
+const ghostTimes=[0,.30,.57,.78,1];
+const ghostLines=ghostTimes.map((_,i)=>{
+ const line=new THREE.Line(new THREE.BufferGeometry(),
+   new THREE.LineBasicMaterial({
+     color:i===ghostTimes.length-1?0xffd99e:0x8de7b1,
+     transparent:true,opacity:.22,depthTest:true,depthWrite:false
+   }));
+ wholeSwingGhosts.add(line);return line;
+});
+function updateWholeSwingGhosts(){
+ const begin=sw.motionStart,span=sw.finishAt-begin;
+ ghostTimes.forEach((q,i)=>{
+   const pose=swingPoseAt(begin+span*q,sw);
+   const start=pose.hand.clone(),end=start.clone().addScaledVector(pose.dir,BAT_LENGTH);
+   ghostLines[i].geometry.dispose();
+   ghostLines[i].geometry=new THREE.BufferGeometry().setFromPoints([start,end]);
+ });
+ wholeSwingGhosts.visible=el('showWholeSwing').checked;
+}
+const traceGroups={};
+for(const [key,color] of [['grip',0x5bc0ff],['tip',0xffc269],['sweet',0x8de7b1],['old',0xd295ff]]){
+ const line=new THREE.Line(new THREE.BufferGeometry(),
+    key==='old' ? new THREE.LineDashedMaterial({color,transparent:true,opacity:.85,dashSize:.05,gapSize:.03})
+                : new THREE.LineBasicMaterial({color,transparent:true,opacity:.95}));
+ scene.add(line);traceGroups[key]=line;
+}
+function oldPose(t,track){
+ const impact=track.bundle.impact;
+ const r=(t-track.impactAt)/track.toImpactMs;
+ const angle=THREE.MathUtils.degToRad(56*r);
+ const dir=rotateY(impact.dir,angle);
+ dir.y+=.035*Math.sin(angle);dir.normalize();
+ const hand=impact.hand.clone().add(new THREE.Vector3(
+   -.085*Math.sin(angle),.030*(1-Math.cos(angle)),.055*Math.sin(angle)));
+ return{hand,dir};
+}
+function changeAim(){
+ const x=Number(el('course').value),y=Number(el('height').value);
+ sw=swingAtAim(x,y,2,0,Number(el('stanceAngle').value));
+ ball.position.copy(impactBatPose(x,y).contact);
+ updateReferencePitch(x,y);
+ const tracks={grip:[],tip:[],sweet:[],old:[]};
+ const n=200;
+ for(let i=0;i<=n;i++){
+  const t=sw.motionStart+(sw.finishAt-sw.motionStart)*i/n;
+  const p=swingPoseAt(t,sw);
+  tracks.grip.push(p.hand);
+  tracks.tip.push(p.hand.clone().addScaledVector(p.dir,BAT_LENGTH));
+  tracks.sweet.push(p.hand.clone().addScaledVector(p.dir,(SWEET_START+SWEET_END)/2));
+  const old=oldPose(t,sw);
+  tracks.old.push(old.hand.clone().addScaledVector(old.dir,BAT_LENGTH));
+ }
+ for(const key of Object.keys(traceGroups)){
+  const line=traceGroups[key];
+  line.geometry.dispose();
+  line.geometry=new THREE.BufferGeometry().setFromPoints(tracks[key]);
+  if(key==='old')line.computeLineDistances();
+ }
+ traceGroups.old.visible=el('oldTrace').checked;
+ updateWholeSwingGhosts();
+ const fraction=(0-sw.motionStart)/(sw.finishAt-sw.motionStart);
+ el('impactMark').style.left=(fraction*100)+'%';
+ updatePose();
+}
+function currentMs(){
+ return sw.motionStart+(sw.finishAt-sw.motionStart)*progress;
+}
+function updatePose(){
+ const t=currentMs();
+ const p=swingPoseAt(t,sw);
+ batGroup.position.copy(p.hand);
+ batGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),p.dir);
+ const diff=Math.round(t);
+ const when=Math.abs(diff)<1?'インパクト':(diff<0?'インパクトまで '+(-diff)+'ms':'インパクト後 '+diff+'ms');
+ el('timeLabel').textContent=when;
+ const tipSpeedA=swingPoseAt(Math.min(t+1,sw.finishAt),sw);
+ const tipSpeedB=swingPoseAt(Math.max(t-1,sw.motionStart),sw);
+ const v1=tipSpeedA.hand.clone().addScaledVector(tipSpeedA.dir,BAT_LENGTH);
+ const v2=tipSpeedB.hand.clone().addScaledVector(tipSpeedB.dir,BAT_LENGTH);
+ const v=v1.distanceTo(v2)*1000/Math.max(1,Math.min(t+1,sw.finishAt)-Math.max(t-1,sw.motionStart));
+ const core=p.hand.clone().addScaledVector(p.dir,(SWEET_START+SWEET_END)/2);
+ const impact=sw.bundle.impact;
+ const origin=impact.hand.clone().addScaledVector(impact.dir,(SWEET_START+SWEET_END)/2);
+ const rise=core.y-origin.y;
+ const handOffset=p.hand.distanceTo(sw.bundle.impact.hand);
+ const phase=t<sw.launchStart?'準備（バットを立てた構えから下降）':
+   t<sw.impactAt?'最終加速（操作後40ms相当）':'フォロースルー';
+ // 0° in top view means the bat is square across the plate (world X axis).
+ const topAngle=Math.atan2(p.dir.z,-p.dir.x)*180/Math.PI;
+ const o=sw.bundle.orientation;
+ const planeNormal=o.incomingControl.clone().cross(o.contact).normalize();
+ const planeError=t>=0?Math.asin(Math.min(1,Math.abs(p.dir.dot(planeNormal))))*180/Math.PI:null;
+ el('hud').innerHTML='<strong>'+when+'</strong><div>'+phase+'</div><div>上面からのバット角度 '+Math.round(topAngle)+'°（接触時0°）'+(planeError!==null?' · 振り抜き面のズレ '+planeError.toFixed(1)+'°':'')+'</div><div>ヘッド速度 '+v.toFixed(1)+' m/s · 手元の移動 '+Math.round(handOffset*100)+'cm</div><div>芯の高さ：コンタクト比 '+(rise>=0?'+':'')+Math.round(rise*100)+'cm</div><div>球種 '+pitchNames[el('pitchType').value]+' · 構え '+el('stanceAngle').value+'°</div><div>横 '+Number(el('course').value).toFixed(2)+'m・高さ '+Number(el('height').value).toFixed(2)+'m</div>';
+ timeline.value=String(Math.round(progress*1000));
+}
+function setProgress(v){
+ progress=Math.min(1,Math.max(0,v));
+ updatePose();
+}
+function setPlaying(v){
+ playing=v;playBtn.textContent=v?'一時停止':'再生';
+ playBtn.classList.toggle('active',v);
+}
+function setView(mode){
+ activeView=mode;
+ viewButtons.forEach(b=>{
+  const on=b.dataset.view===mode;
+  b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));
+ });
+ updateCamera();
+}
+function updateCamera(){
+ const w=viewport.clientWidth,h=viewport.clientHeight;
+ if(!w||!h)return;
+ renderer.setSize(w,h,false);
+ const aspect=w/h;
+ orthographic.left=-1.55;orthographic.right=1.55;
+ orthographic.top=1.55/aspect;orthographic.bottom=-1.55/aspect;
+ orthographic.updateProjectionMatrix();
+ if(activeView==='rear'){
+   orthographic.up.set(0,1,0);
+   orthographic.position.set(.32,1.12,-4.2);
+   orthographic.lookAt(.32,1.12,.4);
+ }else if(activeView==='top'){
+   orthographic.up.set(0,0,1);
+   orthographic.position.set(.32,6,.25);
+   orthographic.lookAt(.32,.85,.25);
+ }else{
+   // Respect manual game camera calibration (including FOV); never write it.
+   let c={eyeX:.69,eyeY:1.45,eyeZ:0,lookX:.43,lookY:1.24,lookZ:.43,fov:80};
+   try{const saved=JSON.parse(localStorage.getItem('batting-camera-v1')||'{}');c={...c,...saved}}catch(e){}
+   batterCamera.aspect=aspect;batterCamera.fov=c.fov;batterCamera.updateProjectionMatrix();
+   batterCamera.position.set(c.eyeX,c.eyeY,c.eyeZ);
+   batterCamera.lookAt(c.lookX,c.lookY,c.lookZ);
+ }
+}
+for(const b of viewButtons)b.addEventListener('click',()=>setView(b.dataset.view));
+for(const id of ['course','height','stanceAngle','pitchType'])el(id).addEventListener('change',()=>{setPlaying(false);changeAim()});
+el('showPitchPath').addEventListener('change',()=>{referencePitchPath.visible=el('showPitchPath').checked});
+el('oldTrace').addEventListener('change',()=>{traceGroups.old.visible=el('oldTrace').checked});
+el('showWholeSwing').addEventListener('change',()=>{
+  wholeSwingGhosts.visible=el('showWholeSwing').checked;
+});
+timeline.addEventListener('input',()=>{setPlaying(false);setProgress(Number(timeline.value)/1000)});
+playBtn.addEventListener('click',()=>setPlaying(!playing));
+el('back').addEventListener('click',()=>{setPlaying(false);setProgress(progress-5/(sw.finishAt-sw.motionStart))});
+el('forward').addEventListener('click',()=>{setPlaying(false);setProgress(progress+5/(sw.finishAt-sw.motionStart))});
+const obs=new ResizeObserver(updateCamera);obs.observe(viewport);
+changeAim();setProgress((0-sw.motionStart)/(sw.finishAt-sw.motionStart));setView('rear');
+function frame(now){
+ requestAnimationFrame(frame);
+ if(playing&&lastTime){
+   let t=currentMs()+(now-lastTime)*.32; // deliberate slow-motion playback
+   if(t>sw.finishAt)t=sw.motionStart;
+   setProgress((t-sw.motionStart)/(sw.finishAt-sw.motionStart));
+ }
+ lastTime=now;
+ renderer.render(scene,activeView==='batter'?batterCamera:orthographic);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

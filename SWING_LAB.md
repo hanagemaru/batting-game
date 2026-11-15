@@ -1,0 +1,388 @@
+# Swing motion study lab — 2026-11-13
+
+## Current corrected model (2026-11-14)
+
+**This section supersedes earlier experimental sections describing the
+direct sweet-spot Bezier model and the 40ms complete swing.**
+Their numerical benchmarks are obsolete.
+
+### Confirmed fault
+- Former independent sweet-spot trajectory solved grip backwards from
+  barrel direction, moving the grip X coordinate from approximately +0.60m
+  at impact to -1.50m at +110ms: over 2m of lateral displacement.
+- The sweet spot lifted by 0.55m at +80ms; this was forced by a hand-
+  unconstrained Bezier path.
+- Previous geometric checks verified continuity but overlooked the hand
+  excursion; this was not a rendering issue.
+
+### Corrected kinematics
+- Grip-first: hands follow a short curved path anchored at the exact
+  impactBatPose grip location. The motion is constrained near the hitter.
+- Bat orientation changes independently in yaw and elevation as the bat
+  transitions from upright, loads into the swing plane, then releases.
+  The sweet spot is derived from the grip and a rigid bat direction.
+- Physical-looking full motion has 110ms loading, 40ms final acceleration,
+  110ms follow-through (at the default 2x speed).
+- The gameplay input-to-contact latency stays at 40ms. The preparation is
+  considered preloaded before the finger release; the game currently renders
+  only the last 40ms of acceleration, while the three-camera lab shows all
+  150ms from the upright stance through impact.
+- Speed adjustments remain developer settings; their extreme values are not
+  claimed to be physically representative of real athletes.
+
+### Quantitative validation
+Tested center, high-inside, low-outside, at 1x, 2x, and 4x:
+- Contact grip and orientation match impactBatPose within floating error.
+- Maximum grip distance from impact position: 0.264m (previous: >2m).
+- First derivatives are continuous at loading/launch and impact joins.
+- At default 2x: bat tip 30.5–31.5m/s and grip about 3.2m/s at contact.
+- Over the last 10ms, sweet-spot arc/chord ratio is about 1.01, while the
+  complete head path remains curved (no forcibly linear entire swing).
+- Sweet-spot height after contact rises about 0.17m at +40ms.
+- Both rear (XY) and overhead (XZ) numerical projections were plotted and
+  visually compared to research swing diagrams.
+- The existing collision and batted-ball physics function bodies stay intact.
+  Module syntax and imported/exported symbol references were checked.
+
+### Primary evidence checked
+- King et al. (2012), A new technology for resolving the dynamics of a
+  swinging bat, DOI 10.1007/s12283-012-0084-9. Measured example:
+  approximately 165ms set-to-impact downswing, sweet-spot speed 31.6m/s.
+  Figures 7–8 show overhead hand spirals and the inclined swing plane.
+  https://baseball.physics.illinois.edu/SwingSensorTechnology.pdf
+- Morishita, Hirano, Yanai (2013): segment contributions from torso and
+  upper extremities measured at 500Hz.
+  https://doi.org/10.32226/jjbse.2013_003
+- Milanovich and Nesbit (2014): variable-radius 3D hand and barrel motion
+  challenge fixed-pivot and hand-unconstrained representations.
+  https://www.jssm.org/hf.php?id=jssm-13-180.xml
+
+The corrected model is a research-informed procedural approximation, NOT
+a real player's measured swing. iPhone Safari runtime and subjective visual
+accuracy have not yet been validated on-device.
+
+---
+
+## Current experiment — single global 3D barrel orientation (2026-11-14)
+
+**This section supersedes the earlier piecewise yaw/elevation and quintic
+angle-boundary smoothing versions.**
+
+The user still perceived an unnatural *global* trajectory, although each
+angle component was locally C2 smooth. Root cause found in code:
+- Barrel azimuth (yaw) and barrel elevation were interpolated independently.
+- The 70° upright stance had almost reached a -13° barrel tilt at launch
+  (110ms after preparation started), then yaw rapidly changed during the
+  remaining 40ms. This yields an awkward 3D barrel path despite smooth
+  scalar derivatives. Continuity of individual Euler-like curves does not
+  imply a plausible bat path.
+
+### Revised full-pose movement
+- Keep the verified compact hand/grip path and its phase timing.
+- Define **global 3D direction vectors** at the stance, trailing slot,
+  contact, and follow-through. Azimuth/elevation only select those control
+  poses; they are NOT independently interpolated over time.
+- Interpolate the unit bat direction on the unit sphere via spherical
+  De Casteljau (piecewise spherical cubic Bézier), i.e. geodesic
+  interpolation between 3D directions.
+- The complete 150ms pre-contact window has a single global 3D segment:
+  **NO bat-orientation keyframe at the 110ms load-to-launch boundary.**
+- Follow-through is a separate spherical segment with its initial
+  derivative matched in time to the pre-contact terminal derivative.
+  Bat angular velocity is nonzero through impact.
+- Retain exact existing impact grip position, barrel direction, collision
+  geometry, and responsive last-40ms input-to-contact timing.
+- Update the diagnostic with an optional overlay of five ghost bat poses
+  sampled through the full motion, so whole-swing shape can be evaluated.
+
+### Validation
+- Compared approximate full-motion top (XZ) and rear (XY) projections,
+  angular speed and barrel elevation curves to King et al. 2012 Fig 7–8.
+  The experimental dataset is a guide, NOT a direct reproduction.
+- 3 courses/heights × 3 stance angles (50/70/82°) × 3 speeds (1/2/4):
+  **27 numerical cases passed** for impact geometry, finite values,
+  phase-join continuity, grip movement.
+- Default setting: first barrel-to-contact direction change ~**117°**;
+  hand/grip excursion stays within **0.264m**; 40ms input-to-contact.
+  The whole bat direction now evolves on one 3D curve instead of
+  independently keyed pitch and yaw curves.
+- Local angular speed mismatch across the impact join was under about
+  2% of adjacent speed in all tests; no sudden orientation step at launch.
+- JavaScript syntax, exported/imported names, page DOM references,
+  unchanged ball/bat collision and hit physics verified.
+- The revised page has **not been tested in Safari on the user's device**.
+  Geometric checks do not prove visual realism; the trial must be evaluated.
+
+### Source
+- King et al., *A new technology for resolving the dynamics of a
+  swinging bat*, Sports Eng (2012), Fig 7–8:
+  https://baseball.physics.illinois.edu/SwingSensorTechnology.pdf
+- Sports biomechanics 3D motion-capture of bat and grip:
+  https://www.jstage.jst.go.jp/article/jsmeshd/2019/0/2019_B-28/_article/-char/ja
+
+---
+
+This is a **research-informed, procedural approximation**, not motion capture,
+inverse dynamics, a biomechanically validated player model, or a full skeletal simulator.
+
+## Live preview routes (preview-aim-cursor-ab-20261109 branch)
+
+- Swing lab: `swing-view-lab.html`
+- Playable A/B: `playtest-impact-ab.html`
+- Shared source: `swing-kinematics.js`
+
+## Why the model changed
+
+Old implementation: a single bat direction spinning around the world Y axis,
+with a small hand displacement; it used one angular rotation parameter for both
+hand and bat movement. Smooth-looking but kinematically artificial.
+
+New approximation:
+
+- **Contact constraint**: at the selected (x,y), hand, bat direction and
+  sweet-spot position exactly match `impactBatPose(x,y)`.
+- **Grip arc**: a short rotation about a shoulder/torso surrogate pivot moves
+  the hands around the batter rather than translating in a straight line.
+- **Delayed bat release**: independent smooth angular functions for the
+  hand/torso and the bat. Wrist/bat angular speed peaks around contact.
+- **Zero launch/finish velocity**: normalized swing time is smoothly remapped
+  to start and finish at rest while retaining continuous contact velocity.
+- **3D variation**: the vertical tip attitude varies slightly before/after contact.
+- **One source of truth**: both collision and 3-view diagnostics import
+  `swingPoseAt` from `swing-kinematics.js`.
+
+The timing window in the *game* is still intentionally much more forgiving
+than real baseball. The model changes swing geometry, not game balance settings.
+
+## View and comparison controls
+
+- Rear orthographic view: analyze horizontal/vertical motion.
+- Overhead orthographic view: analyze batter-to-pitcher and lateral motion.
+- Batter's-eye view: reuses saved `batting-camera-v1` settings including FOV,
+  but **does not modify** those settings.
+- Slow playback, pause, 5 ms stepping, course and height presets.
+- Grip, barrel tip, and sweet-spot tracks.
+- Optional dashed old-model barrel-tip trace.
+
+## Research references
+
+1. Morishita, Hirano, Yanai. *Kinematic contributions of torso and upper
+   extremity for producing bat-head velocity in baseball batting*.
+   Japanese Journal of Biomechanics in Sports and Exercise (2013),
+   DOI: 10.32226/jjbse.2013_003.
+   The study analyzes pelvis, thorax, upper extremity, and bat as multiple
+   linked rigid segments and quantifies contributions to tip speed.
+   https://www.jstage.jst.go.jp/article/jjbse/17/4/17_2013_003/_article/-char/en
+
+2. Nakashima, Horiuchi, Kimura, Sakurai. *Acceptable range of timing error
+   at bat-ball impact in baseball depends on the bat swing path*.
+   Frontiers in Sports and Active Living (2025),
+   DOI: 10.3389/fspor.2025.1557145.
+   Data-driven trajectories consider bat angle and top/side-view swing shape.
+   https://www.frontiersin.org/journals/sports-and-active-living/articles/10.3389/fspor.2025.1557145/full
+
+3. Crisco, Osvalds, Rainbow. *The Kinetics of Swinging a Baseball Bat*.
+   Journal of Applied Biomechanics (2018), DOI: 10.1123/jab.2017-0337.
+   Bat applied force and torque evolve differently up to impact.
+   https://pubmed.ncbi.nlm.nih.gov/29651903/
+
+## Unresolved: height and inside/outside recognition in batter view
+
+Previously tuned camera position and FOV should be treated as the baseline:
+do **not** reset or override. They are already manually adjustable.
+
+Future options to evaluate independently from bat model:
+- animated pitcher release and body cues (current pitcher is static);
+- ball contrast/size/motion trail tuning without changing pitch coordinates;
+- subtle final-stage gaze/head tracking with strict limits and a toggle;
+- an optional, low-contrast ball-height/depth cue at plate, if natural visuals
+  remain insufficient.
+
+These are **proposals, not implemented** in this iteration.
+
+## Verification completed
+
+- Static syntax tests for shared model, gameplay, and lab modules passed.
+- Both pages reference same module; gameplay collision/outgoing-ball formulas
+  are not modified.
+- Numerical tests across center/high-inside/low-outside show contact pose
+  errors near zero and bat-tip speed near 36 m/s at impact for default speed.
+- Start/end velocity is ~0.
+- Browser page navigation reachable via raw.githack (game -> swing lab).
+- **Live 3D canvas behavior on a physical iPhone has not been verified.**
+
+## 2026-11-14: first-pitch freeze, upright launch, and pitch trails
+
+### Incident and root cause
+- During the previous refactor, `idealImpactU(pitch)` was inadvertently removed
+  from `playtest-impact-ab.html` when eliminating a duplicate definition of
+  `idealImpactZ`. It is still called in both `showPlateMarker` and
+  `idealImpactTimeMs`; when the first pitch reached the plate, this caused
+  a JavaScript `ReferenceError` and stopped subsequent animation frames.
+- Restored `idealImpactU` while preserving the slope-based contact plane.
+- Added post-refactor verification for missing cross-module imports and
+  required gameplay functions, not merely syntax.
+
+### Upright loading stance (research-informed, NOT motion capture)
+- The default launch bat elevation is 70° above horizontal, with 50°/70°/82°
+  selectable in the three-view diagnostic only.
+- The bat's elevation transitions smoothly into the existing exact
+  `impactBatPose` orientation while grip rotation and delayed bat yaw
+  continue. The spatial contact location, sweet spot and strike-plane
+  definition are unchanged.
+- To support a physically less abrupt barrel lowering phase, the default
+  onset-to-contact interval changed from 50ms to 110ms at the existing
+  2x speed setting. **This changes release timing and needs playtesting.**
+- Peak local instantaneous barrel-tip speed at the intended contact point
+  was tested at roughly 26m/s (default speed) for center/high-inside/
+  low-outside. Starts and finishes close to rest.
+- Bat holding angles differ between real athletes, and published preparation
+  positions are not uniformly vertical. The angle is intentionally adjustable
+  and is not presented as measured universal data.
+
+### Pitch information and persistent trajectory
+- The game now labels pitch type in Japanese
+  (`ストレート`, `カーブ`, `フォーク`) in the pitch header and per-pitch
+  result. The developer's pitch selector retains FAST/CURVE/FORK IDs.
+- The real pitch path is sampled on the same 3D `pitchPoint` / `pitchPointExtended`
+  coordinates used by the ball, drawn progressively, and remains for 1.8s
+  after the pitch reaches the plate, fading toward zero.
+- The three-view lab now has pitch-type selector and matching static
+  reference pitch path (not time-synchronized to swing), with visibility toggle.
+
+### Literature specifically supporting this revision
+- King et al., *Swing Sensor Technology for Baseball* (Sports Engineering);
+  3D bat orientation series captures rest, backswing, set, downswing,
+  follow-through, and changing elevation:
+  https://baseball.physics.illinois.edu/SwingSensorTechnology.pdf
+- *Return to Hitting: An Interval Hitting Progression and Overview of Hitting
+  Mechanics Following Injury* (2015). Notes stance variability, upper-body
+  loading, and ~45° bat orientation in the frontal plane after drive:
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC4675191/
+- Cross (2009), *Mechanics of swinging a bat*, DOI 10.1119/1.2983146:
+  https://www.physics.sydney.edu.au/~cross/PUBLICATIONS/44.BatSwing.pdf
+
+### Validation status
+Static JavaScript syntax of the gameplay, swing model, lab and pitch model:
+all valid. All imported names resolve to exported names; all referenced DOM
+IDs exist. The exact collision scanner and batted-ball physics functions
+remain unchanged. Numerical pose tests confirm exact contact alignment,
+near-zero start/end velocities, upright starting elevation, and expected
+contact speeds. **iPhone Safari runtime has not yet been retested.**
+
+## 2026-11-14: near-linear incoming sweet-spot path and rising follow-through
+
+### Request and resolution
+- User requested the **bat's sweet spot** (not the bat tip or grip)
+  to approach the selected ball-contact point more linearly.
+- After contact, the center of the sweet spot should ascend in world Y,
+  resembling an upward exit from the swing plane.
+- The preceding 110ms launch-to-contact time was too long. Restore a shorter
+  than original 50ms default: **40ms at the default 2x swing speed**.
+  The `BASE_TO_CONTACT_MS` constant is now 80; user-facing duration is
+  `BASE_TO_CONTACT_MS / speed`.
+- The phrase "50 microseconds" in the request was treated as a likely
+  unit slip for the original 50 **milliseconds**, which are the time units
+  used throughout the game.
+
+### New geometry (procedural, not empirical motion capture)
+- Define the contact core exactly from the existing impact bat pose:
+  `impact.hand + impact.dir * (SWEET_START+SWEET_END)/2`.
+- Incoming phase: a cubic Bézier path anchored from the batter-side,
+  moderately high and behind the contact position, into the impact core.
+  Its path is close to a straight line in three dimensions with a shallow
+  dip and positive Y velocity at the instant of contact.
+- Outgoing phase: a second cubic Bézier follows the same contact velocity
+  **in direction and magnitude**, then arcs into upward world Y through
+  the finish.
+- Direction/elevation of the bat are computed separately, from an
+  upright 70-degree launch posture to the exact impact orientation,
+  and then into follow-through. Grip position is derived from the chosen
+  core and direction, rather than independently animated. Hence the
+  collision segment, visible bat and the trajectory display agree.
+- Both phases have continuous core position and first time derivative
+  at impact. Nominal end behavior eases to rest.
+- The new sweep runs through the same `swingPoseAt()` module in both game
+  and three-view diagnostic. 3D collision and hit physics function bodies
+  were not modified.
+
+### Numeric checks (default 2x speed, center, inside/high, outside/low)
+- Release-to-contact: **40ms**.
+- At impact: grip and bat orientation agree with original
+  `impactBatPose` within floating point precision.
+- Starting barrel elevation: **70°** (also 50°/82° diagnostic options).
+- Sampled incoming path-length / straight-chord ratio: ~**1.022**.
+- Sweet-spot height relative to contact: **+0.26m** at +40ms,
+  **+0.55m** at +80ms.
+- Core speed through contact: ~**24.9m/s**, tip speed ~**25m/s**.
+- Contact core velocity is continuous; first-derivative hand and bat
+  orientation continuity is designed by interpolation.
+- Physical iPhone/Safari test remains pending; geometric values do not
+  establish that the new shape will look natural in the player camera.
+
+### Files
+- `swing-kinematics.js` – core Bézier approach and rising finish.
+- `swing-view-lab.html` – shows sweet-core Y offset from contact while
+  stepping through the swing.
+- `playtest-impact-ab.html` – same shared kinematics, same 3D scanner.
+
+## 2026-11-14: swing direction and upright-to-disc smoothness correction
+
+The user confirmed the grip-constrained model is substantially closer to
+baseball, but its barrel rotates the wrong way and the transition from an
+upright bat into the swing plane shows a sharp angular kink.
+
+Changes to the shared swing-kinematics.js:
+- Reverse barrel **yaw** sequence from +100/+65/0/-135 degrees to
+  -100/-65/0/+135 degrees. This directs the barrel from behind the hitter
+  toward the pitcher instead of the reverse. The compact grip motion remains
+  anchored to the hitter, and the impact pose is still exactly preserved.
+- Use a **single quintic smootherstep pitch-elevation curve** from stance
+  angle to actual impact elevation, rather than two independently interpolated
+  angles meeting at launchStart. It has continuous first and second
+  derivatives through launchStart and zero pitch-angle velocity and
+  acceleration at impact.
+- Replace piecewise cubic Hermite for yaw/grip/lift with quintic Hermite
+  matched in value and velocity and zero second derivatives at phase joins.
+  This reduces visible angular acceleration jumps.
+- Input release to impact remains 40ms at default game speed 2x.
+
+Numerical regression:
+- Test center, high-inside, low-outside at 1x, 2x, and 4x.
+- Barrel yaw monotonic increases through all three phases; no reversal.
+- Impact grip and barrel direction exactly match the target pose (within
+  floating point tolerance).
+- Max grip excursion remains about 0.264m across all cases.
+- Phase join local derivative discontinuities below numerical tolerances.
+- Gameplay and lab import the same shared module, with no changes to the
+  physical collision scanner, saved camera, pitch cadence or bat/ball
+  collision response functions.
+- Live Safari runtime still needs validation on a device.
+
+
+## 2026-11-14: square bat at contact; maintain incoming swing plane after contact
+
+- At the selected standard contact point (inside pitches still farther toward
+  pitcher), the **bat is parallel to the X axis when seen from overhead**:
+  its 3D direction is `(-cos(barrelTilt), -sin(barrelTilt), 0)`.
+  Its vertical tilt is retained. Previous overhead yaw was 10–35 degrees.
+- Before contact, the approach control is now a milder direction
+  (yaw -65° relative to contact, elevation +3° versus impact).
+- After contact, remove independently specified follow-through direction
+  controls. Instead extend the SAME great-circle plane defined by the
+  incoming pre-contact control and the impact direction; keep the
+  initial angular tangent matched across contact.
+- Reduce final angular extent to ~66.4–66.9° after contact (previous ~99°);
+  at default speed, sweet-spot Y rise after +40ms is ~0.186m rather than
+  ~0.399m. Full follow-through Y rise ~0.333m.
+- 27 numerical test cases (3 courses × 3 initial elevations × 3 speeds):
+  overhead contact angle exactly 0°, contact position/direction unchanged
+  relative to the newly defined target, post-contact plane deviation
+  within floating-point precision, compact hand motion (≤0.264m),
+  nominal tip speed ~27.9m/s and 40ms response retained.
+- The three-view lab HUD displays current overhead bat angle and
+  post-contact swing-plane deviation; ideal values are 0° at contact and
+  approximately 0° plane deviation after contact.
+- The original physical collision and hit calculations, saved camera,
+  pitch cadence, Japanese ball-type text and existing touch input are
+  unchanged. iPhone Safari visual test is still required.
