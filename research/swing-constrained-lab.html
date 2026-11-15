@@ -273,7 +273,7 @@ timeline.addEventListener('input',()=>{setPlaying(false);setFrame(+timeline.valu
 $('prev').addEventListener('click',()=>{setPlaying(false);setFrame(Math.round(frame)-1)});
 $('next').addEventListener('click',()=>{setPlaying(false);setFrame(Math.round(frame)+1)});
 $('play').addEventListener('click',()=>setPlaying(!playing));
-$('contact').addEventListener('click',()=>{setPlaying(false);setFrame(CONTACT_FRAME-data.clipStartFrame);});
+$('contact').addEventListener('click',()=>{if(!data)return;setPlaying(false);setFrame(CONTACT_FRAME-data.clipStartFrame);});
 for(const id of ['trace','markers','showBat','showBatTrail','showPlane'])$(id).addEventListener('change',updatePose);
 for(const id of ['profile','exitRise'])$(id).addEventListener('input',()=>{
  $('exitLabel').textContent=$('exitRise').value+'°';
