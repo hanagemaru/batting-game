@@ -969,8 +969,13 @@ function scanSwingCollision(now){
   const end=Math.min(now,sw.finishAt);
   let from=Math.max(sw.lastCheck,sw.motionStart);
   if(end<from)return false;
-  const step=3;
-  for(let ms=from;ms<=end+.01;ms+=step){
+  // With a ~200° fast bat rotation, 3ms samples skip genuine contacts.
+  // Sweep at a sub-millisecond interval, checking the exact final endpoint
+  // so irregular requestAnimationFrame times do not leave gaps.
+  const step=.5;
+  const steps=Math.max(0,Math.ceil((end-from)/step));
+  for(let i=0;i<=steps;i++){
+    const ms=i===steps?end:Math.min(end,from+i*step);
     const pose=swingPoseAt(ms,sw);
     const seg=sweetSegment(pose);
     const bp=ballAtMs(ms);
