@@ -125,7 +125,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
     <div class="calActions"><button id="throwNow">THROW NOW</button><button id="autoBtn">AUTO: ON / 3s</button></div>
     <div id="devStatus" class="devStatus">AUTO投球: 3.0秒間隔</div>
     <div id="impactStatus" class="devStatus">CONTACT: —</div>
-    <div class="devNote">INSIDE = 右打者に近い三塁側（+X）、OUTSIDE = 一塁側（−X）。BALL系はゾーン外を検証します。<br>STRIKE PLANEはカーソルをホームベース前端のストライクゾーン面に表示し、IMPACT SURFACEはコースごとの標準インパクト面に表示します。物理判定はどちらも同じ3Dスイングモデルです。Swing delayはスイング開始前の待ち時間、Swing speedは実際のバット移動速度です。</div>
+    <div class="devNote">INSIDE = 右打者に近い三塁側（+X）、OUTSIDE = 一塁側（−X）。BALL系はゾーン外を検証します。<br>STRIKE PLANEとIMPACT SURFACEのどちらでも、描画と当たり判定に同一の3Dバット姿勢を使用します。Swing delayは開始前の待ち時間、Swing speedは再生速度です。<br>ゲーム固定設定：CMUの手元軌道 × Figure 11 B（−22.4°）× 振り抜き面上昇0°。<a href="./research/swing-constrained-lab.html" target="_blank" rel="noopener" style="color:#9bdce8">研究用3Dビューア</a>から後で再調整できます。</div>
 
     <h2>BATTER CAMERA CALIBRATION</h2>
     <div class="grid">
@@ -177,6 +177,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 <script type="module">
 import * as THREE from 'three';
 import {PLATE_HALF,PLATE_FRONT,FLIGHT_MS,pitchPoint} from './pitch-model.js';
+import {GAME_SWING_CONFIG,validateSwingSource,makeGameSwingBundle,gameSwingPose} from './game-swing-bridge.mjs';
 
 const MODE=(new URLSearchParams(location.search).get('mode')||'score').toLowerCase();
 const RULES={
@@ -309,17 +310,19 @@ const PLAYER_TIMING_LATE_MS=150;
 const FAIR_TIMING_RATIO=.68;
 const FOUL_LINE_DEG=45;
 const FOUL_MAX_DEG=68;
-const BAT_LENGTH=.864; // 34 in adult bat
-const BAT_BARREL_RADIUS=.033; // ~2.6 in max diameter
+// Matching barrel and collision geometry using the shared CMU/B game bridge.
+const BAT_LENGTH=GAME_SWING_CONFIG.physicalBatLengthM;
+const BAT_BARREL_RADIUS=.033;
 const BAT_HANDLE_RADIUS=.014;
-const GRIP_TO_CONTACT=.72;
-const SWEET_START=.56;
-const SWEET_END=.82;
+const GRIP_TO_CONTACT=GAME_SWING_CONFIG.gripToSweetM;
+const SWEET_START=GAME_SWING_CONFIG.sweetStartM;
+const SWEET_END=GAME_SWING_CONFIG.sweetEndM;
 const BAT_RADIUS=.033;
 const BALL_RADIUS=.0365;
 const COLLISION_RADIUS=BAT_RADIUS+BALL_RADIUS+.009;
-const BASE_TO_CONTACT_MS=100;
-const BASE_FOLLOW_THROUGH_MS=220;
+// speed=2: release→contact 40ms, contact→CMU390 follow 220ms.
+const BASE_TO_CONTACT_MS=80;
+const BASE_FOLLOW_THROUGH_MS=440;
 const HIT_VIEW_HOLD_MS=500;
 const HIT_VIEW_RETURN_MS=150;
 const stage=document.querySelector('#stage'),canvas=document.querySelector('#three');
@@ -406,12 +409,13 @@ const batMesh=new THREE.Mesh(
   new THREE.CylinderGeometry(BAT_BARREL_RADIUS,BAT_HANDLE_RADIUS,BAT_LENGTH,18),
   new THREE.MeshStandardMaterial({color:0xc79a63,roughness:.60,metalness:.02})
 );
-batMesh.position.y=BAT_LENGTH/2;
+// The hand proxy grips 12.4cm above the knob; 74cm extends to the tip.
+batMesh.position.y=(GAME_SWING_CONFIG.gripToTipM-GAME_SWING_CONFIG.gripToKnobM)/2;
 worldBat.add(batMesh);
 const skinMat=new THREE.MeshStandardMaterial({color:0xd2a07a,roughness:.8});
 const handA=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),skinMat);
 const handB=new THREE.Mesh(new THREE.SphereGeometry(.034,12,8),skinMat);
-handA.position.y=.030;handB.position.y=.090;
+handA.position.y=-.025;handB.position.y=.045;
 worldBat.add(handA,handB);
 scene.add(worldBat);
 
@@ -502,6 +506,22 @@ const ui={
  cal:document.getElementById('cal'),start:document.getElementById('start')
 };
 
+// Load the genuine captured joint track once; never fall back to fake motion.
+let GAME_CAPTURE_DATA=null;
+const gameStartButton=document.getElementById('startBtn'),
+      gameRetryButton=document.getElementById('retryBtn');
+gameStartButton.disabled=true;gameStartButton.textContent='スイングデータ読み込み中';
+gameRetryButton.disabled=true;
+fetch('./research/cmu124_07_swing.json',{cache:'no-store'})
+  .then(response=>{if(!response.ok)throw Error('HTTP '+response.status);return response.json()})
+  .then(data=>{
+    GAME_CAPTURE_DATA=validateSwingSource(data);
+    gameStartButton.disabled=false;gameRetryButton.disabled=false;gameStartButton.textContent='START';
+  }).catch(error=>{
+    gameStartButton.textContent='データ読み込み失敗';
+    document.getElementById('controlCopy').textContent='CMUモーションを読み込めませんでした。ページを再読み込みしてください。';
+    console.error('Motion source unavailable',error);
+  });
 let S={phase:'idle',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null,pendingEnd:false};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rand=(a,b)=>a+Math.random()*(b-a);
 const cameraProbe=new THREE.PerspectiveCamera();
@@ -598,6 +618,7 @@ function nextPitch(now=performance.now()){
   impactStatus.textContent='CONTACT: —';
 }
 function begin(){
+  if(!GAME_CAPTURE_DATA)return;
   resetSession();
   S={phase:'ready',n:0,score:0,pitch:null,t0:0,nextDue:Infinity,input:null,locked:false,aimWorld:new THREE.Vector3(0,.84,PLATE_FRONT),swing:null,visualSwing:null,batted:null,markerShown:false,contactMarkerUntil:0,hitView:null,pendingEnd:false};
   ui.score.textContent='0000';ui.pitchNo.textContent='0';ui.pitchInfo.textContent='READY';ui.start.style.display='none';
@@ -630,69 +651,23 @@ function locationCap(target){
   const outside=Math.max(ox,oy);
   return{reachable:outside<=1,cap:clamp(1-.30*outside,.70,1),outside};
 }
-function barrelAngle(x,y){
-  const inside=clamp((x+PLATE_HALF)/(2*PLATE_HALF),0,1);
-  const high=clamp((y-ZONE_LOW)/(ZONE_HIGH-ZONE_LOW),0,1);
-  return THREE.MathUtils.degToRad(5+20*inside+20*(1-high));
-}
-function rotateY(v,a){
-  const c=Math.cos(a),sn=Math.sin(a);
-  return new THREE.Vector3(v.x*c+v.z*sn,v.y,-v.x*sn+v.z*c);
-}
+// GAME PRESET: Figure 11 B (-22.4°) and 0° follow-plane elevation.
+// The adjustable research model is preserved at research/swing-constrained-lab.html.
+function barrelAngle(){return THREE.MathUtils.degToRad(22.4);}
 function impactBatPose(x,y){
-  const inside=clamp((x+PLATE_HALF)/(2*PLATE_HALF),0,1);
-  const tilt=barrelAngle(x,y);
-  const forward=THREE.MathUtils.degToRad(10+25*inside);
-  const h=Math.cos(tilt);
-  const dir=new THREE.Vector3(-h*Math.cos(forward),-Math.sin(tilt),h*Math.sin(forward)).normalize();
+  const tilt=barrelAngle();
+  const dir=new THREE.Vector3(-Math.cos(tilt),-Math.sin(tilt),0);
   const contact=new THREE.Vector3(x,y,idealImpactZ(x));
-  const hand=contact.clone().addScaledVector(dir,-GRIP_TO_CONTACT);
-  return{hand,dir,contact};
-}
-function battingViewBasis(){
-  const eye=new THREE.Vector3(cfg.eyeX,cfg.eyeY,cfg.eyeZ);
-  const look=new THREE.Vector3(cfg.lookX,cfg.lookY,cfg.lookZ);
-  const fwd=look.clone().sub(eye).normalize();
-  const right=new THREE.Vector3().crossVectors(fwd,new THREE.Vector3(0,1,0)).normalize();
-  return{eye,fwd,right,up:new THREE.Vector3(0,1,0)};
-}
-function stanceStartPose(){
-  const b=battingViewBasis();
-  const hand=b.eye.clone()
-    .addScaledVector(b.right,.34)
-    .addScaledVector(b.up,-.34)
-    .addScaledVector(b.fwd,-.16);
-  const dir=b.right.clone().multiplyScalar(.72)
-    .addScaledVector(b.up,.62)
-    .addScaledVector(b.fwd,-.18)
-    .normalize();
-  return{hand,dir};
+  return{hand:contact.clone().addScaledVector(dir,-GRIP_TO_CONTACT),dir,contact};
 }
 function swingPoseBundle(x,y){
-  const impact=impactBatPose(x,y);
-  const start=stanceStartPose();
-
-  const ih=new THREE.Vector3(impact.dir.x,0,impact.dir.z).normalize();
-  const fh=rotateY(ih,THREE.MathUtils.degToRad(78));
-  const finishDir=new THREE.Vector3(fh.x*.98,.08,fh.z*.98).normalize();
-  const finish={hand:impact.hand.clone().add(new THREE.Vector3(-.10,-.05,.20)),dir:finishDir};
-  return{start,impact,finish};
-}
-function mixPose(a,b,t){
-  const e=t*t*(3-2*t);
-  return{
-    hand:a.hand.clone().lerp(b.hand,e),
-    dir:a.dir.clone().lerp(b.dir,e).normalize()
-  };
+  if(!GAME_CAPTURE_DATA)throw Error('CMU swing not loaded');
+  return makeGameSwingBundle(GAME_CAPTURE_DATA,[x,y,idealImpactZ(x)]);
 }
 function swingPoseAt(ms,sw){
-  if(ms<=sw.motionStart)return sw.bundle.start;
-  if(ms<=sw.impactAt){
-    const q=clamp((ms-sw.motionStart)/Math.max(1,sw.toImpactMs),0,1);
-    return mixPose(sw.bundle.start,sw.bundle.impact,q);
-  }
-  const q=clamp((ms-sw.impactAt)/Math.max(1,sw.followMs),0,1);
-  return mixPose(sw.bundle.impact,sw.bundle.finish,q);
+  const p=gameSwingPose(ms,sw);
+  return {hand:new THREE.Vector3(...p.hand),dir:new THREE.Vector3(...p.dir),
+    sourceFrame:p.sourceFrame};
 }
 function applyBatPose(pose){
   worldBat.position.copy(pose.hand);
